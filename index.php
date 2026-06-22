@@ -76,49 +76,68 @@
   </section>
 
   <section class="card rule-map-card">
-    <h2>Rules included in this MVP</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Rule ID</th>
-          <th>Rule</th>
-          <th>What it checks</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>CUST_001</td>
-          <td>Customer relationship</td>
-          <td>Checks whether the message identifies the recipient as a customer/member.</td>
-        </tr>
-        <tr>
-          <td>CTX_001</td>
-          <td>Transaction / service context</td>
-          <td>Checks whether the message explains the transaction, service, appointment, report, or activity.</td>
-        </tr>
-        <tr>
-          <td>PAIR_001</td>
-          <td>Customer + transaction pair</td>
-          <td>Checks whether customer identity is paired with a transaction/service/account identifier.</td>
-        </tr>
-        <tr>
-          <td>PARAM_001</td>
-          <td>Parameter format</td>
-          <td>Checks whether parameters follow a clean format like &lt;customer_name&gt;.</td>
-        </tr>
-        <tr>
-          <td>PARAM_002</td>
-          <td>Parameter prefix clarity</td>
-          <td>Checks whether important parameters have clear labels/prefixes.</td>
-        </tr>
-        <tr>
-          <td>TEXT_001</td>
-          <td>Writing quality</td>
-          <td>Checks common typo-like wording and suspicious writing issues.</td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+  <h2>Rules included in this MVP</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Rule ID</th>
+        <th>Rule</th>
+        <th>What it checks</th>
+        <th>Example violation</th>
+        <th>Suggested fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>CUST_001</td>
+        <td>Customer relationship</td>
+        <td>Checks whether the template clearly identifies the message recipient as a customer, member, or user of the business.</td>
+        <td>No customer name, customer code, member code, or customer indicator is found.</td>
+        <td>Add wording such as “Quý khách &lt;customer_name&gt;” or “Mã khách hàng &lt;customer_code&gt;”.</td>
+      </tr>
+
+      <tr>
+        <td>CTX_001</td>
+        <td>Transaction / service context</td>
+        <td>Checks whether the template explains which transaction, service, appointment, report, or activity triggered the message.</td>
+        <td>A survey message asks for feedback but does not mention which order, service, appointment, or experience it refers to.</td>
+        <td>Add concrete context such as “Dịch vụ &lt;service_name&gt;”, “Mã đơn hàng &lt;order_code&gt;”, or “Ngày giao dịch &lt;transaction_date&gt;”.</td>
+      </tr>
+
+      <tr>
+        <td>PAIR_001</td>
+        <td>Customer + transaction/service identifier pair</td>
+        <td>Checks whether customer identity is paired with a transaction, service, account, or activity identifier.</td>
+        <td>The message has &lt;customer_name&gt; but does not include order ID, booking ID, contract ID, service name, or report period.</td>
+        <td>Add a paired identifier such as “Mã đơn hàng &lt;order_code&gt;” or “Dịch vụ đã sử dụng &lt;service_name&gt;”.</td>
+      </tr>
+
+      <tr>
+        <td>PARAM_001</td>
+        <td>Parameter format</td>
+        <td>Checks whether dynamic parameters follow a clean format using letters, numbers, underscores, and angle brackets.</td>
+        <td>Invalid parameter such as &lt;customer name&gt;, &lt;mã_khách_hàng&gt;, or &lt;order-id&gt;.</td>
+        <td>Rename using a clean format, for example &lt;customer_name&gt; or &lt;order_id&gt;.</td>
+      </tr>
+
+      <tr>
+        <td>PARAM_002</td>
+        <td>Parameter prefix clarity</td>
+        <td>Checks whether important parameters have a clear label or prefix so users understand what the value means.</td>
+        <td>&lt;discount_summary&gt; appears alone without a label, or two parameters appear directly next to each other.</td>
+        <td>Add labels such as “Điều kiện áp dụng: &lt;discount_summary&gt;” or “Số tiền: &lt;cost&gt;”.</td>
+      </tr>
+
+      <tr>
+        <td>TEXT_001</td>
+        <td>Writing quality</td>
+        <td>Checks common typo-like wording, unnatural phrasing, repeated punctuation, and obvious writing issues.</td>
+        <td>Text contains typo-like wording such as “KÍCH HỌA”.</td>
+        <td>Correct the wording, for example “KÍCH HOẠT”.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
 
   <script src="app.js"></script>
 </body>

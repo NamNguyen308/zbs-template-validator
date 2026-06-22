@@ -12,35 +12,33 @@ if (!$payload || !isset($payload['template'])) {
     exit;
 }
 
-$templateRaw = $payload['template'];
-$decoded = json_decode($templateRaw, true);
-
-$violations = [];
-$textNodes = [];
-$params = [];
-$buttons = [];
+$templateRaw = trim($payload['template']);
 $templateType = detectTemplateType($templateRaw);
 
+$textNodes = [];
+$buttonNodes = [];
+$params = [];
+$violations = [];
+
+$decoded = json_decode($templateRaw, true);
+
 if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-    walkJson($decoded, '$', $textNodes, $buttons);
+    walkJson($decoded, '$', $textNodes, $buttonNodes);
 } else {
-    // Fallback for pasted pseudo-JSON / exported text
-    $textNodes = extractTextFromRaw($templateRaw);
-    $buttons = extractButtonsFromRaw($templateRaw);
+    $textNodes = extractTextNodesFromPseudoJson($templateRaw);
+    $buttonNodes = extractButtonsFromPseudoJson($templateRaw);
 }
 
-$allText = implode("\n", array_column($textNodes, 'value'));
-$params = extractParams($allText . "\n" . $templateRaw);
+$params = extractParamsFromTextNodes($textNodes);
 
 runCustomerRelationshipCheck($textNodes, $params, $violations);
-runTransactionContextCheck($textNodes, $params, $violations);
+runTransactionServiceContextCheck($textNodes, $params, $violations);
 runCustomerTransactionPairCheck($textNodes, $params, $violations);
 runParameterFormatCheck($params, $violations);
-runParameterPrefixCheck($textNodes, $violations);
+runParameterPrefixClarityCheck($textNodes, $params, $violations);
 runWritingQualityCheck($textNodes, $violations);
 
 $preview = buildPreview($textNodes);
-
 $status = count($violations) > 0 ? "fail" : "pass";
 
 echo json_encode([
@@ -55,64 +53,110 @@ echo json_encode([
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
 
-/* -------------------- Helpers -------------------- */
+/* =========================================================
+   Extraction helpers
+========================================================= */
 
-function walkJson($node, $path, &$textNodes, &$buttons) {
-    if (is_array($node)) {
-        foreach ($node as $key => $value) {
-            $nextPath = is_numeric($key) ? "{$path}[{$key}]" : "{$path}.{$key}";
+function walkJson($node, $path, &$textNodes, &$buttonNodes) {
+    if (!is_array($node)) return;
 
-            if (is_string($value)) {
-                if ($key === 'text' || $key === 'title' || $key === 'paragraph' || str_contains($key, 'text')) {
-                    $clean = cleanText($value);
-                    if ($clean !== '') {
-                        $textNodes[] = [
-                            "location" => $nextPath,
-                            "value" => $clean
-                        ];
-                    }
-                }
+    foreach ($node as $key => $value) {
+        $nextPath = is_numeric($key) ? "{$path}[{$key}]" : "{$path}.{$key}";
 
-                if ($key === 'data' || $key === 'data_detail' || $key === 'url') {
-                    $buttons[] = [
+        if (is_string($value)) {
+            $textKeys = ['text', 'title', 'paragraph', 'c_title', 'c_paragraph'];
+
+            if (in_array($key, $textKeys, true) || str_contains(strtolower($key), 'text')) {
+                $clean = cleanText($value);
+
+                if ($clean !== '') {
+                    $textNodes[] = [
                         "location" => $nextPath,
-                        "value" => $value
+                        "line" => null,
+                        "section" => inferSectionFromPath($nextPath),
+                        "field" => $key,
+                        "value" => $clean,
+                        "source_line" => $value
                     ];
                 }
             }
 
-            walkJson($value, $nextPath, $textNodes, $buttons);
-        }
-    }
-}
-
-function extractTextFromRaw($raw) {
-    $nodes = [];
-    preg_match_all('/""text"":string""(.*?)""/us', $raw, $matches, PREG_OFFSET_CAPTURE);
-
-    foreach ($matches[1] as $index => $match) {
-        $nodes[] = [
-            "location" => "raw.text[$index]",
-            "value" => cleanText($match[0])
-        ];
-    }
-
-    // Carousel fallback
-    preg_match_all('/""c_title"":string""(.*?)""|""c_paragraph"":string""(.*?)""|""title"":string""(.*?)""|""paragraph"":string""(.*?)""/us', $raw, $carouselMatches, PREG_SET_ORDER);
-
-    foreach ($carouselMatches as $index => $m) {
-        $value = '';
-        for ($i = 1; $i < count($m); $i++) {
-            if (!empty($m[$i])) {
-                $value = $m[$i];
-                break;
+            if (in_array($key, ['data', 'data_detail', 'url'], true)) {
+                $buttonNodes[] = [
+                    "location" => $nextPath,
+                    "line" => null,
+                    "value" => $value
+                ];
             }
         }
 
-        if ($value !== '') {
+        walkJson($value, $nextPath, $textNodes, $buttonNodes);
+    }
+}
+
+function extractTextNodesFromPseudoJson($raw) {
+    $lines = preg_split('/\r\n|\r|\n/', $raw);
+    $nodes = [];
+
+    $sectionIndex = null;
+    $component = null;
+    $subComponent = null;
+
+    foreach ($lines as $i => $line) {
+        $lineNo = $i + 1;
+        $trim = trim($line);
+
+        if (preg_match('/^(\d+):\{/', $trim, $m)) {
+            $sectionIndex = $m[1];
+        }
+
+        if (preg_match('/"([^"]+)":\{/', $trim, $m)) {
+            $component = $m[1];
+        }
+
+        if (preg_match('/"(title|key|value|click)":\{/', $trim, $m)) {
+            $subComponent = $m[1];
+        }
+
+        if (preg_match('/"text":string"(.*)"/u', $trim, $m)) {
+            $rawText = $m[1];
+            $clean = cleanText($rawText);
+
+            if ($clean !== '') {
+                $location = buildPseudoLocation($lineNo, $sectionIndex, $component, $subComponent, 'text');
+
+                $nodes[] = [
+                    "location" => $location,
+                    "line" => $lineNo,
+                    "section" => $sectionIndex,
+                    "field" => "text",
+                    "value" => $clean,
+                    "source_line" => $trim
+                ];
+            }
+        }
+
+        if (preg_match('/"c_title":string"(.*)"/u', $trim, $m)) {
+            $clean = cleanText($m[1]);
             $nodes[] = [
-                "location" => "raw.carousel_text[$index]",
-                "value" => cleanText($value)
+                "location" => "line {$lineNo} | carousel.card.title",
+                "line" => $lineNo,
+                "section" => $sectionIndex,
+                "field" => "c_title",
+                "value" => $clean,
+                "source_line" => $trim
+            ];
+        }
+
+        if (preg_match('/"c_paragraph":string"(.*)"/u', $trim, $m)) {
+            $clean = cleanText($m[1]);
+            $nodes[] = [
+                "location" => "line {$lineNo} | carousel.card.paragraph",
+                "line" => $lineNo,
+                "section" => $sectionIndex,
+                "field" => "c_paragraph",
+                "value" => $clean,
+                "source_line" => $trim
             ];
         }
     }
@@ -120,18 +164,41 @@ function extractTextFromRaw($raw) {
     return $nodes;
 }
 
-function extractButtonsFromRaw($raw) {
+function extractButtonsFromPseudoJson($raw) {
+    $lines = preg_split('/\r\n|\r|\n/', $raw);
     $buttons = [];
-    preg_match_all('/""data"":string""(.*?)""/us', $raw, $matches);
 
-    foreach ($matches[1] as $index => $value) {
-        $buttons[] = [
-            "location" => "raw.button_data[$index]",
-            "value" => $value
-        ];
+    foreach ($lines as $i => $line) {
+        $lineNo = $i + 1;
+        $trim = trim($line);
+
+        if (preg_match('/"data":string"(.*)"/u', $trim, $m)) {
+            $buttons[] = [
+                "location" => "line {$lineNo} | button.click.data",
+                "line" => $lineNo,
+                "value" => $m[1],
+                "source_line" => $trim
+            ];
+        }
     }
 
     return $buttons;
+}
+
+function buildPseudoLocation($lineNo, $sectionIndex, $component, $subComponent, $field) {
+    $section = $sectionIndex !== null ? "sections[{$sectionIndex}]" : "unknown_section";
+    $comp = $component ?: "unknown_component";
+    $sub = $subComponent ? ".{$subComponent}" : "";
+
+    return "line {$lineNo} | {$section}.{$comp}{$sub}.{$field}";
+}
+
+function inferSectionFromPath($path) {
+    if (preg_match('/sections\[(\d+)\]/', $path, $m)) {
+        return $m[1];
+    }
+
+    return null;
 }
 
 function cleanText($text) {
@@ -143,15 +210,26 @@ function cleanText($text) {
     return trim($text);
 }
 
-function extractParams($text) {
-    preg_match_all('/<[^>]+>/u', $text, $matches, PREG_OFFSET_CAPTURE);
-
+function extractParamsFromTextNodes($textNodes) {
     $params = [];
-    foreach ($matches[0] as $match) {
-        $params[] = [
-            "value" => $match[0],
-            "offset" => $match[1]
-        ];
+
+    foreach ($textNodes as $node) {
+        preg_match_all('/<[^>]+>/u', $node['value'], $matches, PREG_OFFSET_CAPTURE);
+
+        foreach ($matches[0] as $match) {
+            $value = $match[0];
+            $offset = $match[1];
+
+            $params[] = [
+                "value" => $value,
+                "name" => trim($value, '<>'),
+                "location" => $node['location'],
+                "line" => $node['line'],
+                "text" => $node['value'],
+                "offset" => $offset,
+                "source_line" => $node['source_line']
+            ];
+        }
     }
 
     return $params;
@@ -169,154 +247,227 @@ function detectTemplateType($raw) {
     return 'Custom / Unknown';
 }
 
-function addViolation(&$violations, $ruleId, $ruleName, $category, $location, $value, $reason, $suggestion) {
+
+/* =========================================================
+   Violation helper
+========================================================= */
+
+function addViolation(&$violations, $ruleId, $ruleName, $category, $location, $value, $reason, $suggestion, $sourceLine = null) {
     $violations[] = [
         "rule_id" => $ruleId,
         "rule_name" => $ruleName,
         "category" => $category,
         "location" => $location,
         "violating_value" => $value,
+        "source_line" => $sourceLine,
         "reason" => $reason,
         "suggestion" => $suggestion,
         "review_type" => "auto_detected"
     ];
 }
 
-/* -------------------- Rule 1 -------------------- */
 
-function runCustomerRelationshipCheck($textNodes, $params, &$violations) {
+/* =========================================================
+   Signal helpers
+========================================================= */
+
+function hasCustomerSignal($textNodes, $params) {
     $combined = mb_strtolower(implode(" ", array_column($textNodes, 'value')), 'UTF-8');
 
-    $customerSignals = [
-        'customer_name', 'ten_khach_hang', 'name', 'customer_id',
-        'customer_code', 'ma_khach_hang', 'member_code',
-        'ma_thanh_vien', 'custid', 'phone_number'
+    if (
+        str_contains($combined, 'quý khách') ||
+        str_contains($combined, 'khách hàng') ||
+        str_contains($combined, 'mã khách hàng') ||
+        str_contains($combined, 'mã thành viên')
+    ) {
+        return true;
+    }
+
+    $customerParamSignals = [
+        'customer', 'khach', 'khách', 'cust', 'member',
+        'name', 'ten_khach_hang', 'customer_name', 'customer_code'
     ];
 
-    $hasCustomerSignal = false;
     foreach ($params as $param) {
-        $p = mb_strtolower($param['value'], 'UTF-8');
-        foreach ($customerSignals as $signal) {
-            if (str_contains($p, $signal)) {
-                $hasCustomerSignal = true;
-                break 2;
+        $p = mb_strtolower($param['name'], 'UTF-8');
+
+        foreach ($customerParamSignals as $signal) {
+            if (str_contains($p, $signal)) return true;
+        }
+    }
+
+    return false;
+}
+
+function hasStrongTransactionOrServiceContext($textNodes, $params) {
+    $combined = mb_strtolower(implode(" ", array_column($textNodes, 'value')), 'UTF-8');
+
+    $strongKeywords = [
+        'mã đơn hàng', 'mã hợp đồng', 'mã lịch hẹn', 'mã hồ sơ',
+        'mã giao dịch', 'mã đặt chỗ', 'mã thanh toán',
+        'đặt hẹn thành công', 'lịch hẹn', 'ngày hẹn', 'giờ hẹn',
+        'biển số xe', 'nội dung hẹn', 'kỳ thanh toán',
+        'hạn thanh toán', 'tin đăng', 'ngày điều trị',
+        'cơ sở điều trị', 'báo cáo định kỳ', 'tháng'
+    ];
+
+    foreach ($strongKeywords as $kw) {
+        if (str_contains($combined, $kw)) return true;
+    }
+
+    $contextParamSignals = [
+        'order', 'order_code', 'booking', 'booking_id',
+        'contract', 'contract_id', 'invoice', 'invoice_id',
+        'service_name', 'appointment', 'transaction',
+        'car_id', 'date', 'time', 'month_year',
+        'payment_status', 'listing', 'ma_ho_so'
+    ];
+
+    foreach ($params as $param) {
+        $p = mb_strtolower($param['name'], 'UTF-8');
+
+        foreach ($contextParamSignals as $signal) {
+            if (str_contains($p, $signal)) return true;
+        }
+    }
+
+    return false;
+}
+
+function findBestContextLocation($textNodes) {
+    $surveyKeywords = ['khảo sát', 'ý kiến', 'đánh giá', 'cảm nhận', 'chia sẻ cảm nhận', 'cải thiện dịch vụ'];
+
+    foreach ($textNodes as $node) {
+        $lower = mb_strtolower($node['value'], 'UTF-8');
+
+        foreach ($surveyKeywords as $kw) {
+            if (str_contains($lower, $kw)) {
+                return $node;
             }
         }
     }
 
-    if (!$hasCustomerSignal && !str_contains($combined, 'quý khách') && !str_contains($combined, 'khách hàng')) {
-        addViolation(
-            $violations,
-            "CUST_001",
-            "Missing customer relationship indicator",
-            "Customer Relationship",
-            "template.text",
-            "No customer identifier found",
-            "The template does not clearly identify the recipient as a customer, member, or user of the business.",
-            "Add customer information such as: Quý khách <customer_name> or Mã khách hàng <customer_code>."
-        );
-    }
+    return $textNodes[0] ?? [
+        "location" => "template.text",
+        "value" => "No readable text",
+        "source_line" => null
+    ];
 }
 
-/* -------------------- Rule 2 -------------------- */
+function summarizeFoundCustomerParams($params) {
+    $found = [];
 
-function runTransactionContextCheck($textNodes, $params, &$violations) {
-    $combined = mb_strtolower(implode(" ", array_column($textNodes, 'value')), 'UTF-8');
+    foreach ($params as $param) {
+        $name = mb_strtolower($param['name'], 'UTF-8');
 
-    $contextKeywords = [
-        'mã đơn hàng', 'đơn hàng', 'mã hợp đồng', 'hợp đồng',
-        'mã lịch hẹn', 'lịch hẹn', 'đặt hẹn', 'cuộc hẹn',
-        'dịch vụ', 'ngày giao dịch', 'kỳ thanh toán',
-        'hạn thanh toán', 'mã hồ sơ', 'tin đăng',
-        'báo cáo', 'tháng', 'trạng thái', 'biển số xe',
-        'ngày hẹn', 'giờ hẹn', 'nơi hẹn'
-    ];
+        if (
+            str_contains($name, 'customer') ||
+            str_contains($name, 'cust') ||
+            str_contains($name, 'name') ||
+            $name === 'id'
+        ) {
+            $found[] = $param['value'];
+        }
+    }
 
-    $contextParams = [
-        'order', 'order_code', 'ma_don_hang', 'booking',
-        'contract', 'invoice', 'service', 'service_name',
-        'transaction', 'appointment', 'booking_id',
-        'car_id', 'date', 'time', 'month_year',
-        'report', 'payment_status', 'listing'
-    ];
+    return count($found) ? implode(', ', array_unique($found)) : 'No customer parameter found';
+}
 
-    $hasContext = false;
 
-    foreach ($contextKeywords as $kw) {
-        if (str_contains($combined, $kw)) {
-            $hasContext = true;
+/* =========================================================
+   Rule 1 — Customer relationship
+========================================================= */
+
+function runCustomerRelationshipCheck($textNodes, $params, &$violations) {
+    if (hasCustomerSignal($textNodes, $params)) return;
+
+    $target = $textNodes[0] ?? null;
+
+    addViolation(
+        $violations,
+        "CUST_001",
+        "Customer relationship is not clearly shown",
+        "Customer Relationship",
+        $target['location'] ?? 'template.text',
+        "No customer/member identifier found",
+        "The message does not clearly show that the recipient is an existing customer, member, or user of the business.",
+        "Add a customer identifier, for example: Quý khách <customer_name> or Mã khách hàng <customer_code>.",
+        $target['source_line'] ?? null
+    );
+}
+
+
+/* =========================================================
+   Rule 2 — Transaction / service context
+========================================================= */
+
+function runTransactionServiceContextCheck($textNodes, $params, &$violations) {
+    if (hasStrongTransactionOrServiceContext($textNodes, $params)) return;
+
+    $target = findBestContextLocation($textNodes);
+
+    $isSurveyLike = false;
+    $lower = mb_strtolower(implode(" ", array_column($textNodes, 'value')), 'UTF-8');
+
+    foreach (['khảo sát', 'ý kiến', 'đánh giá', 'cảm nhận', 'cải thiện dịch vụ'] as $kw) {
+        if (str_contains($lower, $kw)) {
+            $isSurveyLike = true;
             break;
         }
     }
 
-    if (!$hasContext) {
-        foreach ($params as $param) {
-            $p = mb_strtolower($param['value'], 'UTF-8');
-            foreach ($contextParams as $signal) {
-                if (str_contains($p, $signal)) {
-                    $hasContext = true;
-                    break 2;
-                }
-            }
-        }
-    }
+    $reason = $isSurveyLike
+        ? "The message asks for feedback or survey input, but it does not specify which order, service, appointment, or customer interaction triggered the survey."
+        : "The message does not clearly explain which transaction, service, appointment, report, or activity triggered it.";
 
-    if (!$hasContext) {
-        addViolation(
-            $violations,
-            "CTX_001",
-            "Missing transaction or service context",
-            "Transaction / Service Context",
-            "template.text",
-            "No transaction/service context found",
-            "The message does not clearly explain which transaction, service, appointment, report, or activity triggered it.",
-            "Add context such as: Mã đơn hàng <order_code>, Mã lịch hẹn <booking_id>, Dịch vụ <service_name>, or Kỳ thanh toán <payment_period>."
-        );
-    }
+    $suggestion = $isSurveyLike
+        ? "Add a concrete service context, for example: Quý khách đã sử dụng dịch vụ <service_name> vào ngày <service_date>, mã giao dịch <transaction_id>."
+        : "Add context such as: Mã đơn hàng <order_code>, Mã lịch hẹn <booking_id>, Dịch vụ <service_name>, or Kỳ thanh toán <payment_period>.";
+
+    addViolation(
+        $violations,
+        "CTX_001",
+        "Missing transaction or service context",
+        "Transaction / Service Context",
+        $target['location'],
+        $target['value'],
+        $reason,
+        $suggestion,
+        $target['source_line']
+    );
 }
 
-/* -------------------- Rule 3 -------------------- */
+
+/* =========================================================
+   Rule 3 — Customer + transaction pair
+========================================================= */
 
 function runCustomerTransactionPairCheck($textNodes, $params, &$violations) {
-    $customerParamFound = false;
-    $contextParamFound = false;
+    $hasCustomer = hasCustomerSignal($textNodes, $params);
+    $hasContext = hasStrongTransactionOrServiceContext($textNodes, $params);
 
-    $customerSignals = ['customer', 'khach', 'khách', 'member', 'cust', 'name', 'ten_'];
-    $contextSignals = ['order', 'don_hang', 'đơn', 'booking', 'contract', 'invoice', 'service', 'appointment', 'car_id', 'date', 'time', 'month', 'payment', 'listing', 'report', 'ma_ho_so'];
+    if (!$hasCustomer || $hasContext) return;
 
-    foreach ($params as $param) {
-        $p = mb_strtolower($param['value'], 'UTF-8');
+    $target = findBestContextLocation($textNodes);
+    $foundCustomer = summarizeFoundCustomerParams($params);
 
-        foreach ($customerSignals as $signal) {
-            if (str_contains($p, $signal)) {
-                $customerParamFound = true;
-                break;
-            }
-        }
-
-        foreach ($contextSignals as $signal) {
-            if (str_contains($p, $signal)) {
-                $contextParamFound = true;
-                break;
-            }
-        }
-    }
-
-    if ($customerParamFound && !$contextParamFound) {
-        addViolation(
-            $violations,
-            "PAIR_001",
-            "Missing customer + transaction/service identifier pair",
-            "Customer + Transaction Pair",
-            "template.parameters",
-            "Customer parameter found, but no transaction/service identifier found",
-            "The template identifies the customer but does not include a transaction, service, account, or activity identifier.",
-            "Add a paired identifier such as: Mã khách hàng <customer_code>, Mã đơn hàng <order_code>, Mã hợp đồng <contract_id>, or Dịch vụ <service_name>."
-        );
-    }
+    addViolation(
+        $violations,
+        "PAIR_001",
+        "Missing customer + transaction/service identifier pair",
+        "Customer + Transaction Pair",
+        $target['location'],
+        "Found customer identifier(s): {$foundCustomer}; no transaction/service identifier found",
+        "The template identifies the customer but does not include a specific order, service, appointment, contract, report, or activity identifier.",
+        "Add a paired identifier, for example: Mã đơn hàng <order_code>, Mã lịch hẹn <booking_id>, Mã hợp đồng <contract_id>, or Dịch vụ đã sử dụng <service_name>.",
+        $target['source_line']
+    );
 }
 
-/* -------------------- Rule 4 -------------------- */
+
+/* =========================================================
+   Rule 4 — Parameter format
+========================================================= */
 
 function runParameterFormatCheck($params, &$violations) {
     $seen = [];
@@ -327,78 +478,70 @@ function runParameterFormatCheck($params, &$violations) {
         if (isset($seen[$value])) continue;
         $seen[$value] = true;
 
-        if (!preg_match('/^<[A-Za-z0-9_\\$]+>$/u', $value)) {
+        $isValid = preg_match('/^<[A-Za-z0-9_\$]+>$/u', $value);
+
+        if (!$isValid) {
             addViolation(
                 $violations,
                 "PARAM_001",
                 "Invalid parameter format",
                 "Parameter Format",
-                "template.parameters",
+                $param['location'],
                 $value,
-                "Parameter should not contain spaces, Vietnamese accents, hyphens, or special characters.",
-                "Rename the parameter using only letters, numbers, underscores, and optional system prefix. Example: <customer_name>."
+                "Parameter names should not contain spaces, Vietnamese accents, hyphens, or unsupported special characters.",
+                "Rename it using letters, numbers, and underscores only. Example: <customer_name>.",
+                $param['source_line']
             );
         }
     }
 }
 
-/* -------------------- Rule 5 -------------------- */
 
-function runParameterPrefixCheck($textNodes, &$violations) {
-    $riskyParams = [
-        'discount_discountdesc',
-        'discount_summary',
-        'discount_discountamount',
-        'voucher_code',
-        'expireddate',
-        'discount_enddate',
-        'cost',
-        'price',
-        'amount'
-    ];
+/* =========================================================
+   Rule 5 — Parameter prefix clarity
+========================================================= */
 
-    foreach ($textNodes as $node) {
-        $text = $node['value'];
+function runParameterPrefixClarityCheck($textNodes, $params, &$violations) {
+    foreach ($params as $param) {
+        $text = $param['text'];
+        $value = $param['value'];
+        $offset = $param['offset'];
+        $name = mb_strtolower($param['name'], 'UTF-8');
 
-        preg_match_all('/<[^>]+>/u', $text, $matches, PREG_OFFSET_CAPTURE);
+        $before = mb_substr($text, max(0, $offset - 35), 35, 'UTF-8');
+        $after = mb_substr($text, $offset + mb_strlen($value, 'UTF-8'), 25, 'UTF-8');
 
-        foreach ($matches[0] as $match) {
-            $param = $match[0];
-            $offset = $match[1];
-            $paramName = mb_strtolower(trim($param, '<>'), 'UTF-8');
+        $hasClearPrefix = preg_match('/(quý khách|khách hàng|mã khách hàng|mã đơn hàng|mã hợp đồng|mã lịch hẹn|mã|tên|điều kiện|hạn|hsd|số tiền|giá|ưu đãi|voucher|hạng|ngày|giờ|nơi|dịch vụ|trạng thái|biển số|tin đăng|môi giới)\s*[:：]?\s*$/iu', $before);
 
-            $before = mb_substr($text, max(0, $offset - 30), 30, 'UTF-8');
-            $after = mb_substr($text, $offset + mb_strlen($param, 'UTF-8'), 20, 'UTF-8');
+        $isAdjacentToAnotherParam = preg_match('/^\s*<[^>]+>/u', $after);
 
-            $hasPrefix = preg_match('/(quý khách|khách hàng|mã|tên|điều kiện|hạn|hsd|số tiền|giá|ưu đãi|voucher|hạng|ngày|giờ|nơi|dịch vụ|trạng thái|biển số|tin đăng|môi giới|kỳ thanh toán)\s*[:：]?\s*$/iu', $before);
+        $isRiskyParam =
+            str_contains($name, 'discount') ||
+            str_contains($name, 'summary') ||
+            str_contains($name, 'amount') ||
+            str_contains($name, 'price') ||
+            str_contains($name, 'cost') ||
+            str_contains($name, 'voucher') ||
+            str_contains($name, 'expired') ||
+            str_contains($name, 'date');
 
-            $isAdjacentToAnotherParam = preg_match('/^\\s*<[^>]+>/u', $after);
-
-            $isRisky = false;
-            foreach ($riskyParams as $risky) {
-                if (str_contains($paramName, $risky)) {
-                    $isRisky = true;
-                    break;
-                }
-            }
-
-            if (($isRisky && !$hasPrefix) || $isAdjacentToAnotherParam) {
-                addViolation(
-                    $violations,
-                    "PARAM_002",
-                    "Parameter needs clearer prefix",
-                    "Parameter Prefix Clarity",
-                    $node['location'],
-                    $param,
-                    "This parameter appears without a clear label or is placed directly next to another parameter, making its meaning unclear.",
-                    suggestPrefix($param)
-                );
-            }
+        if (($isRiskyParam && !$hasClearPrefix) || $isAdjacentToAnotherParam) {
+            addViolation(
+                $violations,
+                "PARAM_002",
+                "Parameter needs clearer prefix",
+                "Parameter Prefix Clarity",
+                $param['location'],
+                $value,
+                "This parameter appears without a clear label or is placed directly next to another parameter, making the value difficult to understand.",
+                dynamicPrefixSuggestion($value),
+                $param['source_line']
+            );
         }
     }
 }
 
-function suggestPrefix($param) {
+function dynamicPrefixSuggestion($param) {
     $lower = mb_strtolower($param, 'UTF-8');
 
     if (str_contains($lower, 'discountdesc') || str_contains($lower, 'summary')) {
@@ -420,15 +563,18 @@ function suggestPrefix($param) {
     return "Add a clear label before the parameter, for example: Mã khách hàng {$param} or Điều kiện áp dụng: {$param}.";
 }
 
-/* -------------------- Rule 6 -------------------- */
+
+/* =========================================================
+   Rule 6 — Writing quality
+========================================================= */
 
 function runWritingQualityCheck($textNodes, &$violations) {
     $typoMap = [
         'KÍCH HỌA' => 'KÍCH HOẠT',
         'kích họa' => 'kích hoạt',
-        'KHÁCH HÀNG hạng' => 'khách hàng hạng',
         'đề người dùng' => 'đến người dùng',
-        'tiếp theo đúng khách hàng' => 'tiếp cận đúng khách hàng'
+        'tiếp theo đúng khách hàng' => 'tiếp cận đúng khách hàng',
+        'thương hiệu hiệu' => 'thương hiệu'
     ];
 
     foreach ($textNodes as $node) {
@@ -443,8 +589,9 @@ function runWritingQualityCheck($textNodes, &$violations) {
                     "Writing Quality",
                     $node['location'],
                     $wrong,
-                    "The template contains wording that may be considered a typo or unnatural expression.",
-                    "Replace '{$wrong}' with '{$correct}'."
+                    "The message contains wording that may be considered a typo or unnatural expression.",
+                    "Replace '{$wrong}' with '{$correct}'.",
+                    $node['source_line']
                 );
             }
         }
@@ -458,27 +605,30 @@ function runWritingQualityCheck($textNodes, &$violations) {
                 $node['location'],
                 $m[0],
                 "Repeated punctuation may make the message look unprofessional.",
-                "Use normal punctuation, for example one period or one exclamation mark."
+                "Use normal punctuation, for example one period or one exclamation mark.",
+                $node['source_line']
             );
         }
     }
 }
 
-/* -------------------- Preview -------------------- */
+
+/* =========================================================
+   Preview
+========================================================= */
 
 function buildPreview($textNodes) {
     $preview = [];
 
     foreach ($textNodes as $node) {
-        $value = $node['value'];
-
-        if ($value === '') continue;
+        if ($node['value'] === '') continue;
 
         $preview[] = [
             "location" => $node['location'],
-            "text" => $value
+            "line" => $node['line'],
+            "text" => $node['value']
         ];
     }
 
-    return array_slice($preview, 0, 12);
+    return array_slice($preview, 0, 15);
 }

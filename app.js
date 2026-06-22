@@ -113,20 +113,31 @@ function renderViolations(violations) {
         <code>${escapeHtml(v.location)}</code>
       </div>
 
+      ${v.source_line ? `
+        <div class="info-row">
+          <strong>Source line</strong>
+          <code>${escapeHtml(v.source_line)}</code>
+        </div>
+      ` : ""}
+
       <div class="info-row">
         <strong>Violating value</strong>
         <code>${escapeHtml(v.violating_value)}</code>
       </div>
 
-      <p class="reason">${escapeHtml(v.reason)}</p>
+      <div class="reason-box">
+        <strong>Why this may be rejected</strong>
+        <p>${escapeHtml(v.reason)}</p>
+      </div>
 
       <div class="fix-box">
-        <strong>Suggested fix:</strong>
+        <strong>Suggested fix</strong>
         <p>${escapeHtml(v.suggestion)}</p>
       </div>
     </div>
   `).join("");
 }
+
 
 function renderSuggestions(suggestions) {
   if (!suggestions.length) {
