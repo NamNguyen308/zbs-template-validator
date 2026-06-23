@@ -67,7 +67,7 @@ function renderResult(result) {
 }
 
 function renderPreview(preview) {
-  if (!preview.length) {
+  if (!preview || !preview.title) {
     messagePreview.className = "message-preview empty";
     messagePreview.innerHTML = "No readable message text found.";
     return;
@@ -75,18 +75,39 @@ function renderPreview(preview) {
 
   messagePreview.className = "message-preview";
 
-  messagePreview.innerHTML = preview.map((item, index) => {
-    const text = highlightParams(escapeHtml(item.text));
-    const typeClass = index === 0 ? "preview-title" : "preview-line";
+  const logo = preview.logo_text || "BRAND";
+  const title = preview.title;
+  const body = preview.body || [];
+  const buttons = preview.buttons || [];
 
-    return `
-      <div class="${typeClass}">
-        <span class="preview-index">${index + 1}</span>
-        <p>${text}</p>
-        <small>${escapeHtml(item.location)}</small>
+  messagePreview.innerHTML = `
+    <div class="zalo-phone-card">
+      <div class="brand-logo-text">
+        ${escapeHtml(logo)}
       </div>
-    `;
-  }).join("");
+
+      <div class="zalo-title">
+        ${highlightParams(escapeHtml(title.text))}
+      </div>
+
+      <div class="zalo-meta">
+        ${escapeHtml(title.location)}
+      </div>
+
+      <div class="zalo-body">
+        ${body.map(item => `
+          <p>${highlightParams(escapeHtml(item.text))}</p>
+          <small>${escapeHtml(item.location)}</small>
+        `).join("")}
+      </div>
+
+      <div class="zalo-buttons">
+        ${buttons.length ? buttons.map(btn => `
+          <button type="button">${escapeHtml(btn.text)}</button>
+        `).join("") : ""}
+      </div>
+    </div>
+  `;
 }
 
 function renderViolations(violations) {

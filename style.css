@@ -421,3 +421,77 @@ td:first-child {
   color: #475569;
   line-height: 1.5;
 }
+
+.zalo-phone-card {
+  width: 100%;
+  max-width: 390px;
+  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #dfe5ef;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  padding: 18px;
+}
+
+.brand-logo-text {
+  display: inline-block;
+  font-weight: 900;
+  font-size: 18px;
+  color: #111827;
+  letter-spacing: 0.3px;
+  margin-bottom: 14px;
+  text-transform: uppercase;
+}
+
+.zalo-title {
+  font-weight: 800;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.zalo-meta {
+  color: #94a3b8;
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+
+.zalo-body p {
+  margin: 10px 0 4px;
+  color: #374151;
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+.zalo-body small {
+  display: block;
+  color: #94a3b8;
+  font-size: 10px;
+  margin-bottom: 8px;
+}
+
+.zalo-buttons {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.zalo-buttons button {
+  width: 100%;
+  border: none;
+  background: #1769ff;
+  color: white;
+  font-weight: 800;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: default;
+}
+
+.param-chip {
+  background: #e8f0ff;
+  color: #0f4ec8;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 800;
+}

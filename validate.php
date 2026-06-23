@@ -38,7 +38,7 @@ runParameterFormatCheck($params, $violations);
 runParameterPrefixClarityCheck($textNodes, $params, $violations);
 runWritingQualityCheck($textNodes, $violations);
 
-$preview = buildPreview($textNodes);
+$preview = buildMessagePreview($textNodes);
 $status = count($violations) > 0 ? "fail" : "pass";
 
 echo json_encode([
@@ -64,13 +64,16 @@ function walkJson($node, $path, &$textNodes, &$buttonNodes) {
         $nextPath = is_numeric($key) ? "{$path}[{$key}]" : "{$path}.{$key}";
 
         if (is_string($value)) {
-            $textKeys = ['text', 'title', 'paragraph', 'c_title', 'c_paragraph'];
+            $clean = cleanTextPreserveParams($value);
 
-            if (in_array($key, $textKeys, true) || str_contains(strtolower($key), 'text')) {
-                $clean = cleanText($value);
+            if ($clean !== '') {
+                $isButtonText = str_contains($nextPath, '.buttons.') || str_contains($nextPath, '.c_buttons.');
 
-                if ($clean !== '') {
+                $textKeys = ['text', 'title', 'paragraph', 'c_title', 'c_paragraph', 'c_text'];
+
+                if (in_array($key, $textKeys, true) || str_contains(strtolower($key), 'text')) {
                     $textNodes[] = [
+                        "type" => $isButtonText ? "button" : "message",
                         "location" => $nextPath,
                         "line" => null,
                         "section" => inferSectionFromPath($nextPath),
@@ -106,27 +109,28 @@ function extractTextNodesFromPseudoJson($raw) {
         $lineNo = $i + 1;
         $trim = trim($line);
 
-        if (preg_match('/^(\d+):\{/', $trim, $m)) {
+        if (preg_match('/^(\d+):\{1 item/u', $trim, $m)) {
             $sectionIndex = $m[1];
+            $component = null;
+            $subComponent = null;
         }
 
-        if (preg_match('/"([^"]+)":\{/', $trim, $m)) {
+        if (preg_match('/"(oa_info|banner|map_info|buttons|open_utility|rating|carousel|custom_section)":\{/u', $trim, $m)) {
             $component = $m[1];
         }
 
-        if (preg_match('/"(title|key|value|click)":\{/', $trim, $m)) {
+        if (preg_match('/"(title|key|value|click)":\{/u', $trim, $m)) {
             $subComponent = $m[1];
         }
 
         if (preg_match('/"text":string"(.*)"/u', $trim, $m)) {
             $rawText = $m[1];
-            $clean = cleanText($rawText);
+            $clean = cleanTextPreserveParams($rawText);
 
             if ($clean !== '') {
-                $location = buildPseudoLocation($lineNo, $sectionIndex, $component, $subComponent, 'text');
-
                 $nodes[] = [
-                    "location" => $location,
+                    "type" => $component === "buttons" ? "button" : "message",
+                    "location" => buildPseudoLocation($lineNo, $sectionIndex, $component, $subComponent, 'text'),
                     "line" => $lineNo,
                     "section" => $sectionIndex,
                     "field" => "text",
@@ -137,8 +141,9 @@ function extractTextNodesFromPseudoJson($raw) {
         }
 
         if (preg_match('/"c_title":string"(.*)"/u', $trim, $m)) {
-            $clean = cleanText($m[1]);
+            $clean = cleanTextPreserveParams($m[1]);
             $nodes[] = [
+                "type" => "message",
                 "location" => "line {$lineNo} | carousel.card.title",
                 "line" => $lineNo,
                 "section" => $sectionIndex,
@@ -149,8 +154,9 @@ function extractTextNodesFromPseudoJson($raw) {
         }
 
         if (preg_match('/"c_paragraph":string"(.*)"/u', $trim, $m)) {
-            $clean = cleanText($m[1]);
+            $clean = cleanTextPreserveParams($m[1]);
             $nodes[] = [
+                "type" => "message",
                 "location" => "line {$lineNo} | carousel.card.paragraph",
                 "line" => $lineNo,
                 "section" => $sectionIndex,
@@ -201,12 +207,28 @@ function inferSectionFromPath($path) {
     return null;
 }
 
-function cleanText($text) {
+function cleanTextPreserveParams($text) {
     $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+    preg_match_all('/<[$A-Za-z0-9_]+>/u', $text, $matches);
+    $placeholders = [];
+
+    foreach ($matches[0] as $i => $param) {
+        $token = "___PARAM_{$i}___";
+        $placeholders[$token] = $param;
+        $text = str_replace($param, $token, $text);
+    }
+
     $text = preg_replace('/<span[^>]*>/i', '', $text);
     $text = str_replace('</span>', '', $text);
     $text = strip_tags($text);
+
+    foreach ($placeholders as $token => $param) {
+        $text = str_replace($token, $param, $text);
+    }
+
     $text = preg_replace('/\s+/u', ' ', $text);
+
     return trim($text);
 }
 
@@ -271,8 +293,17 @@ function addViolation(&$violations, $ruleId, $ruleName, $category, $location, $v
    Signal helpers
 ========================================================= */
 
+function getMessageTextNodes($textNodes) {
+    return array_values(array_filter($textNodes, fn($n) => $n['type'] !== 'button'));
+}
+
+function getButtonTextNodes($textNodes) {
+    return array_values(array_filter($textNodes, fn($n) => $n['type'] === 'button'));
+}
+
 function hasCustomerSignal($textNodes, $params) {
-    $combined = mb_strtolower(implode(" ", array_column($textNodes, 'value')), 'UTF-8');
+    $messageNodes = getMessageTextNodes($textNodes);
+    $combined = mb_strtolower(implode(" ", array_column($messageNodes, 'value')), 'UTF-8');
 
     if (
         str_contains($combined, 'quý khách') ||
@@ -285,14 +316,17 @@ function hasCustomerSignal($textNodes, $params) {
 
     $customerParamSignals = [
         'customer', 'khach', 'khách', 'cust', 'member',
-        'name', 'ten_khach_hang', 'customer_name', 'customer_code'
+        'name', 'ten_khach_hang', 'customer_name',
+        'customer_code', 'id'
     ];
 
     foreach ($params as $param) {
         $p = mb_strtolower($param['name'], 'UTF-8');
 
         foreach ($customerParamSignals as $signal) {
-            if (str_contains($p, $signal)) return true;
+            if ($p === $signal || str_contains($p, $signal)) {
+                return true;
+            }
         }
     }
 
@@ -300,44 +334,63 @@ function hasCustomerSignal($textNodes, $params) {
 }
 
 function hasStrongTransactionOrServiceContext($textNodes, $params) {
-    $combined = mb_strtolower(implode(" ", array_column($textNodes, 'value')), 'UTF-8');
+    $messageNodes = getMessageTextNodes($textNodes);
+    $combined = mb_strtolower(implode(" ", array_column($messageNodes, 'value')), 'UTF-8');
 
     $strongKeywords = [
-        'mã đơn hàng', 'mã hợp đồng', 'mã lịch hẹn', 'mã hồ sơ',
-        'mã giao dịch', 'mã đặt chỗ', 'mã thanh toán',
-        'đặt hẹn thành công', 'lịch hẹn', 'ngày hẹn', 'giờ hẹn',
-        'biển số xe', 'nội dung hẹn', 'kỳ thanh toán',
-        'hạn thanh toán', 'tin đăng', 'ngày điều trị',
-        'cơ sở điều trị', 'báo cáo định kỳ', 'tháng'
+        'mã đơn hàng', 'mã sản phẩm', 'mã hợp đồng', 'mã lịch hẹn',
+        'mã hồ sơ', 'mã giao dịch', 'mã đặt chỗ', 'mã thanh toán',
+        'thông báo tình trạng đơn hàng', 'đặt hẹn thành công',
+        'lịch hẹn', 'ngày hẹn', 'giờ hẹn', 'biển số xe',
+        'nội dung hẹn', 'kỳ thanh toán', 'hạn thanh toán',
+        'tin đăng', 'ngày điều trị', 'cơ sở điều trị',
+        'báo cáo định kỳ', 'tháng', 'hóa đơn', 'trạng thái đơn hàng'
     ];
 
     foreach ($strongKeywords as $kw) {
-        if (str_contains($combined, $kw)) return true;
+        if (str_contains($combined, $kw)) {
+            return true;
+        }
     }
 
     $contextParamSignals = [
-        'order', 'order_code', 'booking', 'booking_id',
-        'contract', 'contract_id', 'invoice', 'invoice_id',
-        'service_name', 'appointment', 'transaction',
-        'car_id', 'date', 'time', 'month_year',
-        'payment_status', 'listing', 'ma_ho_so'
+        'order', 'order_code', 'product', 'product_code',
+        'booking', 'booking_id', 'contract', 'contract_id',
+        'invoice', 'invoice_id', 'service_name',
+        'service_date', 'appointment', 'transaction',
+        'transaction_id', 'car_id', 'date', 'time',
+        'month_year', 'payment_status', 'listing',
+        'ma_ho_so', 'report'
     ];
 
     foreach ($params as $param) {
         $p = mb_strtolower($param['name'], 'UTF-8');
 
         foreach ($contextParamSignals as $signal) {
-            if (str_contains($p, $signal)) return true;
+            if (str_contains($p, $signal)) {
+                return true;
+            }
         }
     }
 
     return false;
 }
 
+function isSurveyLike($textNodes) {
+    $combined = mb_strtolower(implode(" ", array_column(getMessageTextNodes($textNodes), 'value')), 'UTF-8');
+
+    foreach (['khảo sát', 'ý kiến', 'đánh giá', 'cảm nhận', 'chia sẻ cảm nhận', 'cải thiện dịch vụ'] as $kw) {
+        if (str_contains($combined, $kw)) return true;
+    }
+
+    return false;
+}
+
 function findBestContextLocation($textNodes) {
+    $messageNodes = getMessageTextNodes($textNodes);
     $surveyKeywords = ['khảo sát', 'ý kiến', 'đánh giá', 'cảm nhận', 'chia sẻ cảm nhận', 'cải thiện dịch vụ'];
 
-    foreach ($textNodes as $node) {
+    foreach ($messageNodes as $node) {
         $lower = mb_strtolower($node['value'], 'UTF-8');
 
         foreach ($surveyKeywords as $kw) {
@@ -347,14 +400,14 @@ function findBestContextLocation($textNodes) {
         }
     }
 
-    return $textNodes[0] ?? [
+    return $messageNodes[0] ?? [
         "location" => "template.text",
         "value" => "No readable text",
         "source_line" => null
     ];
 }
 
-function summarizeFoundCustomerParams($params) {
+function summarizeCustomerSignals($textNodes, $params) {
     $found = [];
 
     foreach ($params as $param) {
@@ -366,11 +419,21 @@ function summarizeFoundCustomerParams($params) {
             str_contains($name, 'name') ||
             $name === 'id'
         ) {
-            $found[] = $param['value'];
+            $found[] = $param['value'] . ($param['line'] ? " at line " . $param['line'] : "");
         }
     }
 
-    return count($found) ? implode(', ', array_unique($found)) : 'No customer parameter found';
+    if (count($found)) {
+        return implode(', ', array_unique($found));
+    }
+
+    $combined = implode(" ", array_column(getMessageTextNodes($textNodes), 'value'));
+
+    if (str_contains(mb_strtolower($combined, 'UTF-8'), 'quý khách')) {
+        return 'customer wording found: “Quý khách”';
+    }
+
+    return 'No customer identifier found';
 }
 
 
@@ -381,7 +444,7 @@ function summarizeFoundCustomerParams($params) {
 function runCustomerRelationshipCheck($textNodes, $params, &$violations) {
     if (hasCustomerSignal($textNodes, $params)) return;
 
-    $target = $textNodes[0] ?? null;
+    $target = getMessageTextNodes($textNodes)[0] ?? null;
 
     addViolation(
         $violations,
@@ -399,28 +462,27 @@ function runCustomerRelationshipCheck($textNodes, $params, &$violations) {
 
 /* =========================================================
    Rule 2 — Transaction / service context
+   Avoid duplicate with PAIR_001:
+   If customer exists but context missing, PAIR_001 will handle it.
 ========================================================= */
 
 function runTransactionServiceContextCheck($textNodes, $params, &$violations) {
-    if (hasStrongTransactionOrServiceContext($textNodes, $params)) return;
+    $hasCustomer = hasCustomerSignal($textNodes, $params);
+    $hasContext = hasStrongTransactionOrServiceContext($textNodes, $params);
+
+    if ($hasContext) return;
+
+    if ($hasCustomer) {
+        return;
+    }
 
     $target = findBestContextLocation($textNodes);
 
-    $isSurveyLike = false;
-    $lower = mb_strtolower(implode(" ", array_column($textNodes, 'value')), 'UTF-8');
-
-    foreach (['khảo sát', 'ý kiến', 'đánh giá', 'cảm nhận', 'cải thiện dịch vụ'] as $kw) {
-        if (str_contains($lower, $kw)) {
-            $isSurveyLike = true;
-            break;
-        }
-    }
-
-    $reason = $isSurveyLike
+    $reason = isSurveyLike($textNodes)
         ? "The message asks for feedback or survey input, but it does not specify which order, service, appointment, or customer interaction triggered the survey."
         : "The message does not clearly explain which transaction, service, appointment, report, or activity triggered it.";
 
-    $suggestion = $isSurveyLike
+    $suggestion = isSurveyLike($textNodes)
         ? "Add a concrete service context, for example: Quý khách đã sử dụng dịch vụ <service_name> vào ngày <service_date>, mã giao dịch <transaction_id>."
         : "Add context such as: Mã đơn hàng <order_code>, Mã lịch hẹn <booking_id>, Dịch vụ <service_name>, or Kỳ thanh toán <payment_period>.";
 
@@ -449,7 +511,15 @@ function runCustomerTransactionPairCheck($textNodes, $params, &$violations) {
     if (!$hasCustomer || $hasContext) return;
 
     $target = findBestContextLocation($textNodes);
-    $foundCustomer = summarizeFoundCustomerParams($params);
+    $foundCustomer = summarizeCustomerSignals($textNodes, $params);
+
+    $reason = isSurveyLike($textNodes)
+        ? "The template identifies the recipient, but the survey/feedback request is not tied to a specific order, service, appointment, transaction, or customer interaction."
+        : "The template identifies the customer but does not include a specific order, service, appointment, contract, report, or activity identifier.";
+
+    $suggestion = isSurveyLike($textNodes)
+        ? "Add service context before the survey CTA. Example: Quý khách đã sử dụng dịch vụ <service_name> vào ngày <service_date>, mã giao dịch <transaction_id>. Sau đó mời khách hàng thực hiện khảo sát."
+        : "Add a paired identifier, for example: Mã đơn hàng <order_code>, Mã lịch hẹn <booking_id>, Mã hợp đồng <contract_id>, or Dịch vụ đã sử dụng <service_name>.";
 
     addViolation(
         $violations,
@@ -457,9 +527,9 @@ function runCustomerTransactionPairCheck($textNodes, $params, &$violations) {
         "Missing customer + transaction/service identifier pair",
         "Customer + Transaction Pair",
         $target['location'],
-        "Found customer identifier(s): {$foundCustomer}; no transaction/service identifier found",
-        "The template identifies the customer but does not include a specific order, service, appointment, contract, report, or activity identifier.",
-        "Add a paired identifier, for example: Mã đơn hàng <order_code>, Mã lịch hẹn <booking_id>, Mã hợp đồng <contract_id>, or Dịch vụ đã sử dụng <service_name>.",
+        "Customer signal found: {$foundCustomer}. Missing transaction/service identifier.",
+        $reason,
+        $suggestion,
         $target['source_line']
     );
 }
@@ -577,7 +647,7 @@ function runWritingQualityCheck($textNodes, &$violations) {
         'thương hiệu hiệu' => 'thương hiệu'
     ];
 
-    foreach ($textNodes as $node) {
+    foreach (getMessageTextNodes($textNodes) as $node) {
         $text = $node['value'];
 
         foreach ($typoMap as $wrong => $correct) {
@@ -614,21 +684,43 @@ function runWritingQualityCheck($textNodes, &$violations) {
 
 
 /* =========================================================
-   Preview
+   Message preview
 ========================================================= */
 
-function buildPreview($textNodes) {
-    $preview = [];
+function buildMessagePreview($textNodes) {
+    $messageNodes = getMessageTextNodes($textNodes);
+    $buttonNodes = getButtonTextNodes($textNodes);
 
-    foreach ($textNodes as $node) {
-        if ($node['value'] === '') continue;
+    $logo = inferLogoText($messageNodes);
 
-        $preview[] = [
-            "location" => $node['location'],
-            "line" => $node['line'],
-            "text" => $node['value']
-        ];
+    $title = null;
+    $body = [];
+
+    foreach ($messageNodes as $node) {
+        if (!$title) {
+            $title = $node;
+        } else {
+            $body[] = $node;
+        }
     }
 
-    return array_slice($preview, 0, 15);
+    return [
+        "logo_text" => $logo,
+        "title" => $title,
+        "body" => array_slice($body, 0, 8),
+        "buttons" => array_slice($buttonNodes, 0, 3),
+        "raw_nodes" => array_slice($textNodes, 0, 15)
+    ];
+}
+
+function inferLogoText($messageNodes) {
+    foreach ($messageNodes as $node) {
+        $text = trim($node['value']);
+
+        if (preg_match('/^(.+?)\s+(xin chào|kính gửi|cảm ơn|thông báo)/iu', $text, $m)) {
+            return mb_strtoupper(trim($m[1]), 'UTF-8');
+        }
+    }
+
+    return "BRAND";
 }
