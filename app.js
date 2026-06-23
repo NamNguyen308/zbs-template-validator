@@ -286,11 +286,6 @@ function renderViolations(violations) {
         <strong>Why this may be rejected</strong>
         <p>${escapeHtml(v.reason)}</p>
       </div>
-
-      <div class="fix-box">
-        <strong>Suggested fix</strong>
-        <p>${escapeHtml(v.suggestion)}</p>
-      </div>
     </div>
   `).join("");
 }

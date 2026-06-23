@@ -580,10 +580,200 @@ function summarizeCustomerSignals($textNodes, $params) {
    Rules
 ========================================================= */
 
+function detectTemplateScenario($textNodes, $params) {
+    $combined = mb_strtolower(implode(' ', array_column(getMessageTextNodes($textNodes), 'value')), 'UTF-8');
+
+    if (
+        str_contains($combined, 'voucher') ||
+        str_contains($combined, 'mã ưu đãi') ||
+        str_contains($combined, 'ưu đãi') ||
+        str_contains($combined, 'giảm') ||
+        str_contains($combined, 'sinh nhật') ||
+        str_contains($combined, 'hạng thành viên')
+    ) {
+        return 'voucher';
+    }
+
+    if (
+        str_contains($combined, 'khảo sát') ||
+        str_contains($combined, 'ý kiến') ||
+        str_contains($combined, 'đánh giá') ||
+        str_contains($combined, 'cảm nhận') ||
+        str_contains($combined, 'cải thiện dịch vụ')
+    ) {
+        return 'survey';
+    }
+
+    if (
+        str_contains($combined, 'đặt hẹn') ||
+        str_contains($combined, 'lịch hẹn') ||
+        str_contains($combined, 'ngày hẹn') ||
+        str_contains($combined, 'giờ hẹn') ||
+        str_contains($combined, 'nơi hẹn')
+    ) {
+        return 'appointment';
+    }
+
+    if (
+        str_contains($combined, 'thanh toán') ||
+        str_contains($combined, 'số tiền') ||
+        str_contains($combined, 'hạn thanh toán') ||
+        str_contains($combined, 'hóa đơn')
+    ) {
+        return 'payment';
+    }
+
+    return 'generic';
+}
+
+function buildCustomerRelationshipMessage($textNodes) {
+    $scenario = detectTemplateScenario($textNodes, []);
+
+    if ($scenario === 'voucher') {
+        return [
+            'reason' => 'This voucher message does not clearly identify the recipient as a specific customer or member. For customer-care or promotion-related templates, the reviewer may need to see that the offer is sent to an identifiable user, not a generic audience.',
+            'suggestion' => 'Add a customer identifier near the opening line, for example: Quý khách <customer_name> or Mã khách hàng <customer_code>.'
+        ];
+    }
+
+    if ($scenario === 'survey') {
+        return [
+            'reason' => 'This feedback/survey message does not clearly show who the survey is intended for. Without a customer identifier, the message may look like a generic mass survey.',
+            'suggestion' => 'Add customer identity before asking for feedback, for example: Quý khách <customer_name> or Mã khách hàng <customer_code>.'
+        ];
+    }
+
+    if ($scenario === 'payment') {
+        return [
+            'reason' => 'This payment-related message does not clearly identify the payer/customer. Payment notifications usually need enough customer information so the recipient understands the payment belongs to them.',
+            'suggestion' => 'Add customer information such as: Quý khách <customer_name>, Mã khách hàng <customer_code>, or Căn hộ <apartment_code>.'
+        ];
+    }
+
+    return [
+        'reason' => 'The message does not clearly show that the recipient is an existing customer, member, or user of the business.',
+        'suggestion' => 'Add a customer identifier, for example: Quý khách <customer_name> or Mã khách hàng <customer_code>.'
+    ];
+}
+
+function buildContextMessage($textNodes) {
+    $scenario = detectTemplateScenario($textNodes, []);
+
+    if ($scenario === 'voucher') {
+        return [
+            'reason' => 'The voucher content shows an offer, but it does not include enough customer/order/contract context to explain why this specific user receives the voucher.',
+            'suggestion' => 'Add a concrete context such as: Mã khách hàng <customer_code>, Mã đơn hàng <order_code>, Mã hợp đồng <contract_id>, or Ngày giao dịch <transaction_date>.'
+        ];
+    }
+
+    if ($scenario === 'survey') {
+        return [
+            'reason' => 'The message asks for survey or feedback input, but it does not specify which order, service, appointment, or customer interaction triggered the survey.',
+            'suggestion' => 'Add service context before the survey request, for example: Quý khách đã sử dụng dịch vụ <service_name> vào ngày <service_date>, mã giao dịch <transaction_id>.'
+        ];
+    }
+
+    if ($scenario === 'payment') {
+        return [
+            'reason' => 'The message looks payment-related but does not clearly state the payment period, invoice, contract, apartment, or order that the amount belongs to.',
+            'suggestion' => 'Add payment context such as: Mã hợp đồng <contract_id>, Căn hộ <apartment_code>, Kỳ thanh toán <payment_period>, or Mã hóa đơn <invoice_id>.'
+        ];
+    }
+
+    return [
+        'reason' => 'The message does not clearly explain which transaction, service, appointment, report, or activity triggered it.',
+        'suggestion' => 'Add context such as: Mã đơn hàng <order_code>, Mã khách hàng <customer_code>, Mã hợp đồng <contract_id>, or Ngày giao dịch <transaction_date>.'
+    ];
+}
+
+function buildPairMessage($textNodes, $params) {
+    $scenario = detectTemplateScenario($textNodes, $params);
+
+    if ($scenario === 'voucher') {
+        return [
+            'reason' => 'The template identifies the customer, but the voucher message is not paired with a stronger identifier such as customer code, order ID, contract ID, or transaction date. This may not satisfy moderation requirements for customer-identifying parameters.',
+            'suggestion' => 'Add a paired identifier near the customer name, for example: Mã khách hàng <customer_code>, Mã đơn hàng <order_code>, Mã hợp đồng <contract_id>, or Ngày giao dịch <transaction_date>.'
+        ];
+    }
+
+    if ($scenario === 'survey') {
+        return [
+            'reason' => 'The template identifies the recipient, but the survey/feedback request is not tied to a specific order, service, appointment, transaction, or customer interaction.',
+            'suggestion' => 'Add service context before the survey CTA. Example: Quý khách đã sử dụng dịch vụ <service_name> vào ngày <service_date>, mã giao dịch <transaction_id>.'
+        ];
+    }
+
+    if ($scenario === 'appointment') {
+        return [
+            'reason' => 'The message identifies the customer, but the appointment context may still need a clear appointment/order/service identifier so the user knows exactly which booking this message refers to.',
+            'suggestion' => 'Add appointment identifiers such as: Mã lịch hẹn <booking_id>, Biển số xe <car_id>, Ngày hẹn <date>, or Dịch vụ <service_name>.'
+        ];
+    }
+
+    if ($scenario === 'payment') {
+        return [
+            'reason' => 'The message identifies the customer, but the payment request should also be linked to a concrete payment object such as invoice, contract, apartment, payment period, or order.',
+            'suggestion' => 'Add payment identifiers such as: Mã hợp đồng <contract_id>, Mã hóa đơn <invoice_id>, Căn hộ <apartment_code>, or Kỳ thanh toán <payment_period>.'
+        ];
+    }
+
+    return [
+        'reason' => 'The template identifies the customer but does not include a specific order, service, appointment, contract, report, or activity identifier.',
+        'suggestion' => 'Add a paired identifier, for example: Mã khách hàng <customer_code>, Mã đơn hàng <order_code>, Mã hợp đồng <contract_id>, or Dịch vụ đã sử dụng <service_name>.'
+    ];
+}
+
+function buildParameterPrefixMessage($param, $text) {
+    $lower = mb_strtolower($param, 'UTF-8');
+    $context = mb_strtolower($text, 'UTF-8');
+
+    if (str_contains($lower, 'discountdesc')) {
+        return [
+            'reason' => 'The discount description parameter appears without a clear label. Reviewers may not know whether this value means condition, description, usage rule, or another voucher detail.',
+            'suggestion' => "Rewrite as: Điều kiện áp dụng: {$param}."
+        ];
+    }
+
+    if (str_contains($lower, 'summary')) {
+        return [
+            'reason' => 'The voucher summary appears as a standalone value without a user-facing label. In the final message, users may not understand that this line describes voucher conditions.',
+            'suggestion' => "Rewrite as: Điều kiện áp dụng: {$param}."
+        ];
+    }
+
+    if (str_contains($lower, 'amount') || str_contains($lower, 'price') || str_contains($lower, 'cost')) {
+        if (str_contains($context, 'voucher') || str_contains($context, 'giảm')) {
+            return [
+                'reason' => 'This amount parameter is related to an offer, but the label around it may not clearly explain whether it is discount value, payment amount, or another amount type.',
+                'suggestion' => "Rewrite as: Giá trị ưu đãi: {$param}."
+            ];
+        }
+
+        return [
+            'reason' => 'This amount parameter appears without a clear monetary label, which can make the value ambiguous for users.',
+            'suggestion' => "Rewrite as: Số tiền: {$param}."
+        ];
+    }
+
+    if (str_contains($lower, 'code')) {
+        return [
+            'reason' => 'This code parameter appears without a clear label, so users may not know whether it is a voucher code, order code, customer code, or another type of code.',
+            'suggestion' => "Rewrite as: Mã ưu đãi: {$param}."
+        ];
+    }
+
+    return [
+        'reason' => 'This parameter appears without a clear label, so users may not understand what this value means.',
+        'suggestion' => "Add a clear label before the parameter, for example: Mã khách hàng {$param} or Điều kiện áp dụng: {$param}."
+    ];
+}
+
+
 function runCustomerRelationshipCheck($textNodes, $params, &$violations) {
     if (hasCustomerSignal($textNodes, $params)) return;
 
     $target = getMessageTextNodes($textNodes)[0] ?? null;
+    $message = buildCustomerRelationshipMessage($textNodes);
 
     addViolation(
         $violations,
@@ -592,8 +782,8 @@ function runCustomerRelationshipCheck($textNodes, $params, &$violations) {
         'Customer Relationship',
         $target['location'] ?? 'template.text',
         'No customer/member identifier found',
-        'The message does not clearly show that the recipient is an existing customer, member, or user of the business.',
-        'Add a customer identifier, for example: Quý khách <customer_name> or Mã khách hàng <customer_code>.',
+        $message['reason'],
+        $message['suggestion'],
         $target['source_line'] ?? null
     );
 }
@@ -603,13 +793,10 @@ function runTransactionServiceContextCheck($textNodes, $params, &$violations) {
     $hasContext = hasStrongTransactionOrServiceContext($textNodes, $params);
 
     if ($hasContext) return;
-
     if ($hasCustomer) return;
 
     $target = findBestContextLocation($textNodes);
-
-    $reason = 'The message does not clearly explain which transaction, service, appointment, report, or activity triggered it.';
-    $suggestion = 'Add context such as: Mã đơn hàng <order_code>, Mã khách hàng <customer_code>, Mã hợp đồng <contract_id>, or Ngày giao dịch <transaction_date>.';
+    $message = buildContextMessage($textNodes);
 
     addViolation(
         $violations,
@@ -618,8 +805,8 @@ function runTransactionServiceContextCheck($textNodes, $params, &$violations) {
         'Transaction / Service Context',
         $target['location'],
         $target['value'],
-        $reason,
-        $suggestion,
+        $message['reason'],
+        $message['suggestion'],
         $target['source_line']
     );
 }
@@ -632,17 +819,7 @@ function runCustomerTransactionPairCheck($textNodes, $params, &$violations) {
 
     $target = findBestContextLocation($textNodes);
     $foundCustomer = summarizeCustomerSignals($textNodes, $params);
-
-    if (isVoucherLike($textNodes)) {
-        $reason = 'The template identifies the recipient but does not include a paired identifier such as customer code, order ID, contract ID, or transaction ID. Voucher/customer-care templates still need enough information to prove the message is sent to a specific customer relationship.';
-        $suggestion = 'Add a paired identifier such as: Mã khách hàng <customer_code>, mã đơn hàng <order_code>, mã hợp đồng <contract_id>, or ngày giao dịch <transaction_date>.';
-    } elseif (isSurveyLike($textNodes)) {
-        $reason = 'The template identifies the recipient, but the survey/feedback request is not tied to a specific order, service, appointment, transaction, or customer interaction.';
-        $suggestion = 'Add service context before the survey CTA. Example: Quý khách đã sử dụng dịch vụ <service_name> vào ngày <service_date>, mã giao dịch <transaction_id>.';
-    } else {
-        $reason = 'The template identifies the customer but does not include a specific order, service, appointment, contract, report, or activity identifier.';
-        $suggestion = 'Add a paired identifier, for example: Mã khách hàng <customer_code>, Mã đơn hàng <order_code>, Mã hợp đồng <contract_id>, or Dịch vụ đã sử dụng <service_name>.';
-    }
+    $message = buildPairMessage($textNodes, $params);
 
     addViolation(
         $violations,
@@ -651,8 +828,8 @@ function runCustomerTransactionPairCheck($textNodes, $params, &$violations) {
         'Customer + Transaction Pair',
         $target['location'],
         "Customer signal found: {$foundCustomer}. Missing paired customer/order/contract/transaction identifier.",
-        $reason,
-        $suggestion,
+        $message['reason'],
+        $message['suggestion'],
         $target['source_line']
     );
 }
@@ -771,6 +948,8 @@ function runParameterPrefixClarityCheck($textNodes, $params, &$violations) {
         if (in_array($name, ['date', 'time', 'transfer_amount', 'bank_transfer_note'], true)) continue;
 
         if ($isRiskyParam && !$hasClearPrefix) {
+            $message = buildParameterPrefixMessage($value, $text);
+
             addViolation(
                 $violations,
                 "PARAM_002",
@@ -778,8 +957,8 @@ function runParameterPrefixClarityCheck($textNodes, $params, &$violations) {
                 "Parameter Prefix Clarity",
                 $param['location'],
                 $value,
-                "This parameter appears without a clear label, so users may not understand what this value means.",
-                dynamicPrefixSuggestion($value),
+                $message['reason'],
+                $message['suggestion'],
                 $param['source_line']
             );
         }
