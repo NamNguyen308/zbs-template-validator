@@ -104,6 +104,8 @@ function extractTextNodesFromPseudoJson($raw) {
     $sectionIndex = null;
     $component = null;
     $subComponent = null;
+    $mapItemIndex = null;
+    $mapPart = null;
 
     foreach ($lines as $i => $line) {
         $lineNo = $i + 1;
@@ -113,13 +115,29 @@ function extractTextNodesFromPseudoJson($raw) {
             $sectionIndex = $m[1];
             $component = null;
             $subComponent = null;
+            $mapItemIndex = null;
+            $mapPart = null;
         }
 
         if (preg_match('/"(oa_info|banner|map_info|buttons|open_utility|rating|carousel|custom_section)":\{/u', $trim, $m)) {
             $component = $m[1];
+
+            if ($component !== 'map_info') {
+                $mapItemIndex = null;
+                $mapPart = null;
+            }
         }
 
-        if (preg_match('/"(title|key|value|click)":\{/u', $trim, $m)) {
+        if ($component === 'map_info' && preg_match('/^(\d+):\{5 items/u', $trim, $m)) {
+            $mapItemIndex = $m[1];
+            $mapPart = null;
+        }
+
+        if ($component === 'map_info' && preg_match('/"(key|value)":\{/u', $trim, $m)) {
+            $mapPart = $m[1];
+        }
+
+        if ($component !== 'map_info' && preg_match('/"(title|key|value|click)":\{/u', $trim, $m)) {
             $subComponent = $m[1];
         }
 
@@ -128,9 +146,24 @@ function extractTextNodesFromPseudoJson($raw) {
             $clean = cleanTextPreserveParams($rawText);
 
             if ($clean !== '') {
+                $role = 'message';
+                $location = buildPseudoLocation($lineNo, $sectionIndex, $component, $subComponent, 'text');
+
+                if ($component === 'buttons') {
+                    $role = 'button';
+                }
+
+                if ($component === 'map_info') {
+                    $role = $mapPart === 'key' ? 'map_key' : 'map_value';
+                    $item = $mapItemIndex !== null ? $mapItemIndex : 'unknown';
+                    $part = $mapPart ?: 'unknown';
+                    $location = "line {$lineNo} | sections[{$sectionIndex}].map_info.items[{$item}].{$part}.text";
+                }
+
                 $nodes[] = [
-                    "type" => $component === "buttons" ? "button" : "message",
-                    "location" => buildPseudoLocation($lineNo, $sectionIndex, $component, $subComponent, 'text'),
+                    "type" => $role === 'button' ? 'button' : 'message',
+                    "role" => $role,
+                    "location" => $location,
                     "line" => $lineNo,
                     "section" => $sectionIndex,
                     "field" => "text",
@@ -144,6 +177,7 @@ function extractTextNodesFromPseudoJson($raw) {
             $clean = cleanTextPreserveParams($m[1]);
             $nodes[] = [
                 "type" => "message",
+                "role" => "carousel_title",
                 "location" => "line {$lineNo} | carousel.card.title",
                 "line" => $lineNo,
                 "section" => $sectionIndex,
@@ -157,6 +191,7 @@ function extractTextNodesFromPseudoJson($raw) {
             $clean = cleanTextPreserveParams($m[1]);
             $nodes[] = [
                 "type" => "message",
+                "role" => "carousel_paragraph",
                 "location" => "line {$lineNo} | carousel.card.paragraph",
                 "line" => $lineNo,
                 "section" => $sectionIndex,
@@ -571,6 +606,28 @@ function runParameterFormatCheck($params, &$violations) {
    Rule 5 — Parameter prefix clarity
 ========================================================= */
 
+function findMapInfoLabelForParam($textNodes, $param) {
+    if (!preg_match('/map_info\.items\[(\d+)\]\.value/u', $param['location'], $m)) {
+        return null;
+    }
+
+    $itemIndex = $m[1];
+
+    foreach ($textNodes as $node) {
+        if (
+            isset($node['role']) &&
+            $node['role'] === 'map_key' &&
+            preg_match('/map_info\.items\[' . preg_quote($itemIndex, '/') . '\]\.key/u', $node['location'])
+        ) {
+            return $node['value'];
+        }
+    }
+
+    return null;
+}
+
+
+
 function runParameterPrefixClarityCheck($textNodes, $params, &$violations) {
     foreach ($params as $param) {
         $text = $param['text'];
@@ -578,10 +635,16 @@ function runParameterPrefixClarityCheck($textNodes, $params, &$violations) {
         $offset = $param['offset'];
         $name = mb_strtolower($param['name'], 'UTF-8');
 
+        $mapInfoLabel = findMapInfoLabelForParam($textNodes, $param);
+
+        if ($mapInfoLabel !== null && trim($mapInfoLabel) !== '') {
+            continue;
+        }
+
         $before = mb_substr($text, max(0, $offset - 35), 35, 'UTF-8');
         $after = mb_substr($text, $offset + mb_strlen($value, 'UTF-8'), 25, 'UTF-8');
 
-        $hasClearPrefix = preg_match('/(quý khách|khách hàng|mã khách hàng|mã đơn hàng|mã hợp đồng|mã lịch hẹn|mã|tên|điều kiện|hạn|hsd|số tiền|giá|ưu đãi|voucher|hạng|ngày|giờ|nơi|dịch vụ|trạng thái|biển số|tin đăng|môi giới)\s*[:：]?\s*$/iu', $before);
+        $hasClearPrefix = preg_match('/(quý khách|khách hàng|mã khách hàng|mã đơn hàng|mã hợp đồng|mã lịch hẹn|mã|tên|điều kiện|hạn|hsd|số tiền|giá|ưu đãi|voucher|hạng|ngày|giờ|nơi|dịch vụ|trạng thái|biển số|tin đăng|môi giới|nội dung hẹn)\s*[:：]?\s*$/iu', $before);
 
         $isAdjacentToAnotherParam = preg_match('/^\s*<[^>]+>/u', $after);
 
@@ -688,8 +751,14 @@ function runWritingQualityCheck($textNodes, &$violations) {
 ========================================================= */
 
 function buildMessagePreview($textNodes) {
-    $messageNodes = getMessageTextNodes($textNodes);
-    $buttonNodes = getButtonTextNodes($textNodes);
+    $messageNodes = array_values(array_filter($textNodes, function ($n) {
+        return ($n['type'] ?? '') !== 'button'
+            && !in_array(($n['role'] ?? ''), ['map_key', 'map_value']);
+    }));
+
+    $buttonNodes = array_values(array_filter($textNodes, fn($n) => ($n['type'] ?? '') === 'button'));
+
+    $mapRows = buildMapInfoRows($textNodes);
 
     $logo = inferLogoText($messageNodes);
 
@@ -708,9 +777,74 @@ function buildMessagePreview($textNodes) {
         "logo_text" => $logo,
         "title" => $title,
         "body" => array_slice($body, 0, 8),
+        "info_rows" => $mapRows,
         "buttons" => array_slice($buttonNodes, 0, 3),
         "raw_nodes" => array_slice($textNodes, 0, 15)
     ];
+}
+
+function buildMapInfoRows($textNodes) {
+    $rows = [];
+
+    foreach ($textNodes as $node) {
+        if (!isset($node['role'])) continue;
+
+        if (preg_match('/map_info\.items\[(\d+)\]\.(key|value)/u', $node['location'], $m)) {
+            $idx = $m[1];
+            $part = $m[2];
+
+            if (!isset($rows[$idx])) {
+                $rows[$idx] = [
+                    "label" => "",
+                    "value" => "",
+                    "location" => $node['location']
+                ];
+            }
+
+            if ($part === 'key') {
+                $rows[$idx]['label'] = $node['value'];
+            } else {
+                $rows[$idx]['value'] = $node['value'];
+                $rows[$idx]['location'] = $node['location'];
+            }
+        }
+    }
+
+    return array_values(array_filter($rows, function ($row) {
+        return trim($row['label']) !== '' || trim($row['value']) !== '';
+    }));
+}
+
+function buildMapInfoRows($textNodes) {
+    $rows = [];
+
+    foreach ($textNodes as $node) {
+        if (!isset($node['role'])) continue;
+
+        if (preg_match('/map_info\.items\[(\d+)\]\.(key|value)/u', $node['location'], $m)) {
+            $idx = $m[1];
+            $part = $m[2];
+
+            if (!isset($rows[$idx])) {
+                $rows[$idx] = [
+                    "label" => "",
+                    "value" => "",
+                    "location" => $node['location']
+                ];
+            }
+
+            if ($part === 'key') {
+                $rows[$idx]['label'] = $node['value'];
+            } else {
+                $rows[$idx]['value'] = $node['value'];
+                $rows[$idx]['location'] = $node['location'];
+            }
+        }
+    }
+
+    return array_values(array_filter($rows, function ($row) {
+        return trim($row['label']) !== '' || trim($row['value']) !== '';
+    }));
 }
 
 function inferLogoText($messageNodes) {

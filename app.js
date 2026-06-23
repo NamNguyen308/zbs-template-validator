@@ -78,6 +78,7 @@ function renderPreview(preview) {
   const logo = preview.logo_text || "BRAND";
   const title = preview.title;
   const body = preview.body || [];
+  const infoRows = preview.info_rows || [];
   const buttons = preview.buttons || [];
 
   messagePreview.innerHTML = `
@@ -90,16 +91,22 @@ function renderPreview(preview) {
         ${highlightParams(escapeHtml(title.text))}
       </div>
 
-      <div class="zalo-meta">
-        ${escapeHtml(title.location)}
-      </div>
-
       <div class="zalo-body">
         ${body.map(item => `
           <p>${highlightParams(escapeHtml(item.text))}</p>
-          <small>${escapeHtml(item.location)}</small>
         `).join("")}
       </div>
+
+      ${infoRows.length ? `
+        <div class="zalo-info-table">
+          ${infoRows.map(row => `
+            <div class="zalo-info-row">
+              <span>${escapeHtml(row.label)}</span>
+              <strong>${highlightParams(escapeHtml(row.value))}</strong>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
 
       <div class="zalo-buttons">
         ${buttons.length ? buttons.map(btn => `

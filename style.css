@@ -495,3 +495,28 @@ td:first-child {
   border-radius: 6px;
   font-weight: 800;
 }
+
+
+.zalo-info-table {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.zalo-info-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 14px;
+}
+
+.zalo-info-row span {
+  color: #4b5563;
+}
+
+.zalo-info-row strong {
+  color: #111827;
+  font-weight: 800;
+  word-break: break-word;
+}
