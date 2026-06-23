@@ -11,6 +11,7 @@ const violationCount = document.getElementById("violationCount");
 const manualCount = document.getElementById("manualCount");
 const violationsBox = document.getElementById("violations");
 const suggestionsBox = document.getElementById("suggestions");
+const debugPanel = document.getElementById("debugPanel");
 
 validateBtn.addEventListener("click", validateTemplate);
 clearBtn.addEventListener("click", clearAll);
@@ -26,30 +27,42 @@ async function validateTemplate() {
 
   validateBtn.disabled = true;
   validateBtn.textContent = "Validating...";
+  debugPanel.classList.add("hidden");
+  debugPanel.textContent = "";
 
   try {
     const response = await fetch("validate.php", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ template })
     });
 
-    const result = await response.json();
+    const raw = await response.text();
+    let result;
+
+    try {
+      result = JSON.parse(raw);
+    } catch (parseError) {
+      console.error("Server did not return JSON:", raw);
+      debugPanel.classList.remove("hidden");
+      debugPanel.textContent = raw;
+      alert("PHP returned an error page instead of JSON. Check the debug panel below.");
+      return;
+    }
+
     renderResult(result);
   } catch (error) {
-    alert("Validation failed. Please check your PHP server.");
+    alert("Validation failed. Please check network or PHP server.");
     console.error(error);
+  } finally {
+    validateBtn.disabled = false;
+    validateBtn.textContent = "Validate Template";
   }
-
-  validateBtn.disabled = false;
-  validateBtn.textContent = "Validate Template";
 }
 
 function renderResult(result) {
   if (result.status === "error") {
-    alert(result.message);
+    alert(result.message || "Validation error");
     return;
   }
 
@@ -61,7 +74,7 @@ function renderResult(result) {
   statusBadge.textContent = result.status === "pass" ? "Pass" : "Fail";
   statusBadge.className = result.status === "pass" ? "status pass" : "status fail";
 
-  renderPreview(result.preview || []);
+  renderPreview(result.preview || null);
   renderViolations(result.violations || []);
   renderSuggestions(result.suggestions || []);
 }
@@ -83,18 +96,12 @@ function renderPreview(preview) {
 
   messagePreview.innerHTML = `
     <div class="zalo-phone-card">
-      <div class="brand-logo-text">
-        ${escapeHtml(logo)}
-      </div>
+      <div class="brand-logo-text">${escapeHtml(logo)}</div>
 
-      <div class="zalo-title">
-        ${highlightParams(escapeHtml(title.text))}
-      </div>
+      <div class="zalo-title">${highlightParams(escapeHtml(title.text))}</div>
 
       <div class="zalo-body">
-        ${body.map(item => `
-          <p>${highlightParams(escapeHtml(item.text))}</p>
-        `).join("")}
+        ${body.map(item => `<p>${highlightParams(escapeHtml(item.text))}</p>`).join("")}
       </div>
 
       ${infoRows.length ? `
@@ -109,9 +116,7 @@ function renderPreview(preview) {
       ` : ""}
 
       <div class="zalo-buttons">
-        ${buttons.length ? buttons.map(btn => `
-          <button type="button">${escapeHtml(btn.text)}</button>
-        `).join("") : ""}
+        ${buttons.length ? buttons.map(btn => `<button type="button">${escapeHtml(btn.text)}</button>`).join("") : ""}
       </div>
     </div>
   `;
@@ -119,11 +124,7 @@ function renderPreview(preview) {
 
 function renderViolations(violations) {
   if (!violations.length) {
-    violationsBox.innerHTML = `
-      <div class="empty-state">
-        No violations found for the selected MVP rules.
-      </div>
-    `;
+    violationsBox.innerHTML = `<div class="empty-state">No violations found for the selected MVP rules.</div>`;
     return;
   }
 
@@ -166,16 +167,13 @@ function renderViolations(violations) {
   `).join("");
 }
 
-
 function renderSuggestions(suggestions) {
   if (!suggestions.length) {
     suggestionsBox.innerHTML = "<li>No suggestions yet.</li>";
     return;
   }
 
-  suggestionsBox.innerHTML = suggestions.map(s => `
-    <li>${escapeHtml(s)}</li>
-  `).join("");
+  suggestionsBox.innerHTML = suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join("");
 }
 
 function clearAll() {
@@ -189,49 +187,57 @@ function clearAll() {
   templateTypeBadge.textContent = "Unknown";
   violationCount.textContent = "0";
   manualCount.textContent = "0";
+  debugPanel.classList.add("hidden");
+  debugPanel.textContent = "";
 }
 
 function loadSample() {
-  jsonInput.value = `{
-  "root": {
-    "sections": [
-      {
-        "banner": {
-          "title": {
-            "text": "Chúc mừng sinh nhật <customer_name>",
-            "type": "text-title"
-          }
-        }
-      },
-      {
-        "banner": {
-          "title": {
-            "text": "Lime Orange gửi lời chúc mừng sinh nhật đến <span class=\\"param\\"><customer_name></span>. Tri ân khách hàng hạng <span class=\\"param\\"><membership_tier></span>, tặng bạn Voucher <span class=\\"param\\"><discount_discountAmount></span><span class=\\"param\\"><discount_discountDesc></span>.",
-            "type": "text-normal"
-          }
-        }
-      },
-      {
-        "open_utility": {
-          "type": "voucher",
-          "top": {
-            "contents": {
-              "items": [
-                {
-                  "text": "Giảm <discount_discountAmount>",
-                  "type": "text-title"
-                },
-                {
-                  "text": "<discount_summary>",
-                  "type": "text-normal"
-                }
-              ]
-            }
-          }
-        }
-      }
-    ]
-  }
+  jsonInput.value = `"root":{7 items
+"oa_id":string"375075320"
+"extend_info":string"375075320"
+"sections":[6 items
+1:{1 item
+"banner":{5 items
+"title":{8 items
+"text":string"Nam An xin chào Quý khách <name> - Mã khách hàng <id>,"
+}
+}
+}
+2:{1 item
+"banner":{5 items
+"title":{8 items
+"text":string"Nam An lắng nghe bạn từng chi tiết!"
+}
+}
+}
+3:{1 item
+"banner":{5 items
+"title":{8 items
+"text":string"Ý kiến của Quý khách chính là chìa khóa để chúng tôi cải thiện dịch vụ, nâng cao chất lượng chăm sóc và mang đến trải nghiệm ngày càng tốt hơn."
+}
+}
+}
+4:{1 item
+"banner":{5 items
+"title":{8 items
+"text":string"Quý khách vui lòng chia sẻ cảm nhận của mình để giúp chúng tôi cải thiện dịch vụ tốt hơn. Xin cảm ơn!"
+}
+}
+}
+5:{1 item
+"buttons":{2 items
+"items":[1 item
+0:{5 items
+"text":string"Khảo sát ngay"
+"click":{5 items
+"action":string"action.open.inapp"
+"data":string"https://forms.office.com/r/pirJb83HK8"
+}
+}
+]
+}
+}
+]
 }`;
 }
 
@@ -240,7 +246,7 @@ function highlightParams(text) {
 }
 
 function escapeHtml(str) {
-  return String(str)
+  return String(str ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
