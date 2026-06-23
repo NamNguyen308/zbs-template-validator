@@ -291,14 +291,15 @@ function extractParamsFromTextNodes($textNodes) {
         foreach ($matches[0] as $match) {
             $value = $match[0];
             $params[] = [
-                "value" => $value,
-                "name" => trim($value, '<>'),
-                "location" => $node['location'],
-                "line" => $node['line'],
-                "text" => $node['value'],
-                "offset" => $match[1],
-                "source_line" => $node['source_line']
-            ];
+    "value" => $value,
+    "name" => trim($value, '<>'),
+    "location" => $node['location'],
+    "line" => $node['line'],
+    "section" => $node['section'] ?? null,
+    "text" => $node['value'],
+    "offset" => $match[1],
+    "source_line" => $node['source_line']
+];
         }
     }
 
@@ -507,10 +508,67 @@ function findMapInfoLabelForParam($textNodes, $param) {
     return null;
 }
 
+function findNearbyUtilityLabelForParam($textNodes, $param) {
+    if (!isset($param['line']) || $param['line'] === null) return null;
+
+    $paramLine = (int)$param['line'];
+    $paramSection = $param['section'] ?? null;
+
+    $labelKeywords = [
+        'số tiền thanh toán',
+        'số tiền',
+        'giá trị',
+        'ưu đãi',
+        'điều kiện',
+        'hạn sử dụng',
+        'hsd',
+        'ngày hiệu lực',
+        'mã ưu đãi',
+        'mã voucher',
+        'tài khoản',
+        'ngân hàng',
+        'nội dung chuyển khoản'
+    ];
+
+    foreach ($textNodes as $node) {
+        if (!isset($node['line']) || $node['line'] === null) continue;
+
+        $nodeLine = (int)$node['line'];
+
+        // Chỉ xét các dòng phía trước gần param
+        if ($nodeLine >= $paramLine) continue;
+        if (($paramLine - $nodeLine) > 8) continue;
+
+        // Nếu có section thì ưu tiên cùng section
+        if ($paramSection !== null && isset($node['section']) && $node['section'] !== $paramSection) {
+            continue;
+        }
+
+        $nodeText = mb_strtolower(trim($node['value']), 'UTF-8');
+
+        // Label thường không phải dynamic param
+        if (preg_match('/<[^>]+>/u', $nodeText)) {
+            continue;
+        }
+
+        foreach ($labelKeywords as $keyword) {
+            if (str_contains($nodeText, $keyword)) {
+                return $node['value'];
+            }
+        }
+    }
+
+    return null;
+}
+
+
 function runParameterPrefixClarityCheck($textNodes, $params, &$violations) {
     foreach ($params as $param) {
         $mapInfoLabel = findMapInfoLabelForParam($textNodes, $param);
-        if ($mapInfoLabel !== null && trim($mapInfoLabel) !== '') continue;
+if ($mapInfoLabel !== null && trim($mapInfoLabel) !== '') continue;
+
+$nearbyUtilityLabel = findNearbyUtilityLabelForParam($textNodes, $param);
+if ($nearbyUtilityLabel !== null && trim($nearbyUtilityLabel) !== '') continue;
 
         $text = $param['text'];
         $value = $param['value'];
@@ -524,7 +582,7 @@ function runParameterPrefixClarityCheck($textNodes, $params, &$violations) {
         $isAdjacentToAnotherParam = preg_match('/^\s*<[^>]+>/u', $after);
         $isRiskyParam = str_contains($name, 'discount') || str_contains($name, 'summary') || str_contains($name, 'amount') || str_contains($name, 'price') || str_contains($name, 'cost') || str_contains($name, 'voucher') || str_contains($name, 'expired');
 
-        if (in_array($name, ['date', 'time'], true)) continue;
+        if (in_array($name, ['date', 'time', 'transfer_amount', 'bank_transfer_note'], true)) continue;
 
         if (($isRiskyParam && !$hasClearPrefix) || $isAdjacentToAnotherParam) {
             addViolation($violations, 'PARAM_002', 'Parameter needs clearer prefix', 'Parameter Prefix Clarity', $param['location'], $value, 'This parameter appears without a clear label or is placed directly next to another parameter, making the value difficult to understand.', dynamicPrefixSuggestion($value), $param['source_line']);
