@@ -92,6 +92,7 @@ function renderPreview(preview) {
   const title = preview.title;
   const body = preview.body || [];
   const infoRows = preview.info_rows || [];
+  const utilityBox = preview.utility_box || null;
   const buttons = preview.buttons || [];
 
   messagePreview.innerHTML = `
@@ -115,8 +116,25 @@ function renderPreview(preview) {
         </div>
       ` : ""}
 
+      ${utilityBox ? `
+        <div class="zalo-payment-box">
+          <div class="payment-left">
+            <div class="payment-title">${escapeHtml(utilityBox.title)}</div>
+            <div class="payment-amount">${highlightParams(escapeHtml(utilityBox.amount))}</div>
+            ${(utilityBox.details || []).map(d => `
+              <div class="payment-detail">${highlightParams(escapeHtml(d.text))}</div>
+            `).join("")}
+          </div>
+          <div class="payment-icon">▣</div>
+        </div>
+      ` : ""}
+
       <div class="zalo-buttons">
-        ${buttons.length ? buttons.map(btn => `<button type="button">${escapeHtml(btn.text)}</button>`).join("") : ""}
+        ${buttons.length ? buttons.map((btn, index) => `
+          <button type="button" class="${index === 0 ? "primary-preview-btn" : "secondary-preview-btn"}">
+            ${index === 1 ? "☎ " : ""}${escapeHtml(btn.text)}
+          </button>
+        `).join("") : ""}
       </div>
     </div>
   `;

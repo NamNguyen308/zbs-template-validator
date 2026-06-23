@@ -260,3 +260,141 @@ td:first-child { font-weight: 800; color: var(--blue-dark); }
   .summary-grid { grid-template-columns: 1fr; }
   .info-row { grid-template-columns: 1fr; }
 }
+
+.message-preview {
+  background: #f8fafc;
+  padding: 18px;
+}
+
+.zalo-phone-card {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #dfe5ef;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  padding: 14px;
+  font-family: Arial, sans-serif;
+}
+
+.brand-logo-text {
+  font-weight: 800;
+  font-size: 18px;
+  color: #111827;
+  letter-spacing: 0;
+  margin-bottom: 12px;
+  text-transform: none;
+}
+
+.zalo-title {
+  font-weight: 700;
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.35;
+  margin-bottom: 8px;
+  text-transform: none;
+}
+
+.zalo-body p {
+  margin: 6px 0;
+  color: #4b5563;
+  line-height: 1.35;
+  font-size: 13px;
+  text-transform: none;
+}
+
+.zalo-info-table {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.zalo-info-row {
+  display: grid;
+  grid-template-columns: 105px 1fr;
+  gap: 8px;
+  align-items: start;
+  font-size: 13px;
+}
+
+.zalo-info-row span {
+  color: #4b5563;
+}
+
+.zalo-info-row strong {
+  color: #111827;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.zalo-payment-box {
+  margin-top: 12px;
+  background: #eef7ff;
+  border: 1px solid #cfe7ff;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.payment-title {
+  font-size: 12px;
+  color: #374151;
+  margin-bottom: 2px;
+}
+
+.payment-amount {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+
+.payment-detail {
+  font-size: 11px;
+  color: #4b5563;
+  line-height: 1.25;
+}
+
+.payment-icon {
+  flex: 0 0 auto;
+  color: #dbeafe;
+  font-size: 32px;
+  align-self: center;
+}
+
+.zalo-buttons {
+  margin-top: 10px;
+  display: grid;
+  gap: 7px;
+}
+
+.zalo-buttons button {
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: default;
+}
+
+.primary-preview-btn {
+  background: #1769ff !important;
+  color: white !important;
+}
+
+.secondary-preview-btn {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+.param-chip {
+  background: #e8f0ff;
+  color: #111827;
+  padding: 1px 4px;
+  border-radius: 5px;
+  font-weight: 800;
+}

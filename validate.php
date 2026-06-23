@@ -145,6 +145,7 @@ function extractTextNodesFromPseudoJson($raw) {
         if (preg_match('/"(oa_info|banner|map_info|buttons|open_utility|rating|carousel|custom_section)":\{/u', $trim, $m)) {
             $component = $m[1];
             $subComponent = null;
+
             if ($component !== 'map_info') {
                 $mapItemIndex = null;
                 $mapPart = null;
@@ -155,7 +156,7 @@ function extractTextNodesFromPseudoJson($raw) {
             $mapPart = $m[1];
         }
 
-        if ($component !== 'map_info' && preg_match('/"(title|key|value|click)":\{/u', $trim, $m)) {
+        if ($component !== 'map_info' && preg_match('/"(title|key|value|click|contents)":\{/u', $trim, $m)) {
             $subComponent = $m[1];
         }
 
@@ -165,21 +166,30 @@ function extractTextNodesFromPseudoJson($raw) {
 
             if ($clean !== '') {
                 $role = 'message';
+                $type = 'message';
                 $location = buildPseudoLocation($lineNo, $sectionIndex, $component, $subComponent, 'text');
 
                 if ($component === 'buttons') {
                     $role = 'button';
+                    $type = 'button';
+                }
+
+                if ($component === 'open_utility') {
+                    $role = 'utility';
+                    $type = 'message';
+                    $location = "line {$lineNo} | sections[{$sectionIndex}].open_utility.text";
                 }
 
                 if ($component === 'map_info') {
                     $role = $mapPart === 'key' ? 'map_key' : 'map_value';
+                    $type = 'message';
                     $item = $mapItemIndex !== null ? $mapItemIndex : 'unknown';
                     $part = $mapPart ?: 'unknown';
                     $location = "line {$lineNo} | sections[{$sectionIndex}].map_info.items[{$item}].{$part}.text";
                 }
 
                 $nodes[] = [
-                    "type" => $role === 'button' ? 'button' : 'message',
+                    "type" => $type,
                     "role" => $role,
                     "location" => $location,
                     "line" => $lineNo,
@@ -570,6 +580,9 @@ if ($mapInfoLabel !== null && trim($mapInfoLabel) !== '') continue;
 $nearbyUtilityLabel = findNearbyUtilityLabelForParam($textNodes, $param);
 if ($nearbyUtilityLabel !== null && trim($nearbyUtilityLabel) !== '') continue;
 
+$nearbyUtilityLabel = findNearbyUtilityLabelForParam($textNodes, $param);
+if ($nearbyUtilityLabel !== null && trim($nearbyUtilityLabel) !== '') continue;
+
         $text = $param['text'];
         $value = $param['value'];
         $offset = $param['offset'];
@@ -627,17 +640,25 @@ function runWritingQualityCheck($textNodes, &$violations) {
 
 function buildMessagePreview($textNodes) {
     $messageNodes = array_values(array_filter($textNodes, function ($n) {
-        return ($n['type'] ?? '') !== 'button' && !in_array(($n['role'] ?? ''), ['map_key', 'map_value'], true);
+        return ($n['type'] ?? '') !== 'button'
+            && !in_array(($n['role'] ?? ''), ['map_key', 'map_value', 'utility'], true);
     }));
+
     $buttonNodes = getButtonTextNodes($textNodes);
     $mapRows = buildMapInfoRows($textNodes);
-    $logo = inferLogoText($messageNodes);
+    $utilityBox = buildUtilityBox($textNodes);
+
+    $logo = inferLogoText($textNodes);
 
     $title = null;
     $body = [];
+
     foreach ($messageNodes as $node) {
-        if (!$title) $title = $node;
-        else $body[] = $node;
+        if (!$title) {
+            $title = previewNode($node);
+        } else {
+            $body[] = previewNode($node);
+        }
     }
 
     return [
@@ -645,35 +666,99 @@ function buildMessagePreview($textNodes) {
         "title" => $title,
         "body" => array_slice($body, 0, 8),
         "info_rows" => $mapRows,
-        "buttons" => array_slice($buttonNodes, 0, 3),
+        "utility_box" => $utilityBox,
+        "buttons" => array_slice(array_map('previewNode', $buttonNodes), 0, 3),
         "raw_nodes" => array_slice($textNodes, 0, 15)
+    ];
+}
+
+function previewNode($node) {
+    return [
+        "text" => $node['value'] ?? '',
+        "location" => $node['location'] ?? '',
+        "line" => $node['line'] ?? null,
+        "role" => $node['role'] ?? ''
     ];
 }
 
 function buildMapInfoRows($textNodes) {
     $rows = [];
+
     foreach ($textNodes as $node) {
         if (!preg_match('/map_info\.items\[(\d+)\]\.(key|value)/u', $node['location'], $m)) continue;
+
         $idx = $m[1];
         $part = $m[2];
-        if (!isset($rows[$idx])) $rows[$idx] = ["label" => "", "value" => "", "location" => $node['location']];
-        if ($part === 'key') $rows[$idx]['label'] = $node['value'];
-        else {
+
+        if (!isset($rows[$idx])) {
+            $rows[$idx] = [
+                "label" => "",
+                "value" => "",
+                "location" => $node['location']
+            ];
+        }
+
+        if ($part === 'key') {
+            $rows[$idx]['label'] = $node['value'];
+        } else {
             $rows[$idx]['value'] = $node['value'];
             $rows[$idx]['location'] = $node['location'];
         }
     }
-    return array_values(array_filter($rows, fn($row) => trim($row['label']) !== '' || trim($row['value']) !== ''));
+
+    return array_values(array_filter($rows, function ($row) {
+        return trim($row['label']) !== '' || trim($row['value']) !== '';
+    }));
 }
 
-function inferLogoText($messageNodes) {
-    foreach ($messageNodes as $node) {
-        $text = trim($node['value']);
-        if (preg_match('/^(.+?)\s+(xin chào|kính gửi|cảm ơn|thông báo)/iu', $text, $m)) return mb_strtoupper(trim($m[1]), 'UTF-8');
+function buildUtilityBox($textNodes) {
+    $utilityNodes = array_values(array_filter($textNodes, function ($n) {
+        return ($n['role'] ?? '') === 'utility';
+    }));
+
+    if (!count($utilityNodes)) return null;
+
+    $items = array_map(function ($n) {
+        return [
+            "text" => $n['value'],
+            "location" => $n['location'],
+            "line" => $n['line']
+        ];
+    }, $utilityNodes);
+
+    $title = $items[0]['text'] ?? '';
+    $amount = $items[1]['text'] ?? '';
+    $details = array_slice($items, 2);
+
+    return [
+        "title" => $title,
+        "amount" => $amount,
+        "details" => $details
+    ];
+}
+
+function inferLogoText($textNodes) {
+    $combined = mb_strtolower(implode(' ', array_column($textNodes, 'value')), 'UTF-8');
+
+    if (str_contains($combined, 'bv invest') || str_contains($combined, 'diamond hill')) {
+        return 'BVland';
     }
-    foreach ($messageNodes as $node) {
-        $text = trim($node['value']);
-        if (preg_match('/^(toyota\s+[^\s]+\s*[^\s]*)/iu', $text, $m)) return mb_strtoupper(trim($m[1]), 'UTF-8');
+
+    if (str_contains($combined, 'toyota bến thành')) {
+        return 'TOYOTA BẾN THÀNH';
     }
+
+    if (str_contains($combined, 'nam an')) {
+        return 'NAM AN';
+    }
+
+    foreach ($textNodes as $node) {
+        $text = trim($node['value']);
+
+        if (preg_match('/^(.+?)\s+(xin chào|kính gửi|cảm ơn|thông báo)/iu', $text, $m)) {
+            return trim($m[1]);
+        }
+    }
+
     return 'BRAND';
 }
