@@ -398,3 +398,125 @@ td:first-child { font-weight: 800; color: var(--blue-dark); }
   border-radius: 5px;
   font-weight: 800;
 }
+
+
+.zalo-phone-card {
+  max-width: 330px !important;
+  padding: 12px !important;
+  border-radius: 6px !important;
+  font-family: Arial, sans-serif !important;
+}
+
+.brand-logo-text {
+  text-transform: none !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  color: #4b5563 !important;
+  margin-bottom: 10px !important;
+}
+
+.zalo-title {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  margin-bottom: 6px !important;
+  color: #111827 !important;
+  text-transform: none !important;
+}
+
+.zalo-body p {
+  font-size: 12px !important;
+  line-height: 1.28 !important;
+  color: #4b5563 !important;
+  margin: 5px 0 !important;
+  text-transform: none !important;
+}
+
+.zalo-info-table {
+  margin-top: 8px !important;
+  gap: 4px !important;
+}
+
+.zalo-info-row {
+  grid-template-columns: 100px 1fr !important;
+  gap: 6px !important;
+  font-size: 12px !important;
+}
+
+.zalo-info-row span {
+  color: #4b5563 !important;
+}
+
+.zalo-info-row strong {
+  color: #111827 !important;
+  font-weight: 700 !important;
+}
+
+.zalo-payment-box {
+  margin-top: 10px !important;
+  background: #eef8ff !important;
+  border: 1px solid #cfe8ff !important;
+  border-radius: 6px !important;
+  padding: 8px !important;
+}
+
+.payment-title {
+  font-size: 11px !important;
+  color: #374151 !important;
+  margin-bottom: 1px !important;
+}
+
+.payment-amount {
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: #111827 !important;
+  margin-bottom: 1px !important;
+}
+
+.payment-detail {
+  font-size: 10px !important;
+  line-height: 1.22 !important;
+  color: #4b5563 !important;
+}
+
+.payment-icon {
+  color: #dbeafe !important;
+  font-size: 28px !important;
+}
+
+.zalo-buttons {
+  margin-top: 8px !important;
+  gap: 6px !important;
+}
+
+.zalo-buttons button {
+  font-size: 12px !important;
+  border-radius: 5px !important;
+  padding: 9px 10px !important;
+}
+
+.primary-preview-btn {
+  background: #1769ff !important;
+  color: #ffffff !important;
+}
+
+.secondary-preview-btn {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+.param-inline {
+  display: inline !important;
+  background: transparent !important;
+  color: #111827 !important;
+  font-weight: 800 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+.param-chip {
+  background: transparent !important;
+  color: #111827 !important;
+  font-weight: 800 !important;
+  padding: 0 !important;
+}

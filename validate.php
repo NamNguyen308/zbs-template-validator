@@ -639,12 +639,14 @@ function runWritingQualityCheck($textNodes, &$violations) {
 ========================================================= */
 
 function buildMessagePreview($textNodes) {
+    $textNodes = dedupePreviewNodes($textNodes);
+
     $messageNodes = array_values(array_filter($textNodes, function ($n) {
         return ($n['type'] ?? '') !== 'button'
             && !in_array(($n['role'] ?? ''), ['map_key', 'map_value', 'utility'], true);
     }));
 
-    $buttonNodes = getButtonTextNodes($textNodes);
+    $buttonNodes = dedupePreviewNodes(getButtonTextNodes($textNodes));
     $mapRows = buildMapInfoRows($textNodes);
     $utilityBox = buildUtilityBox($textNodes);
 
@@ -668,8 +670,36 @@ function buildMessagePreview($textNodes) {
         "info_rows" => $mapRows,
         "utility_box" => $utilityBox,
         "buttons" => array_slice(array_map('previewNode', $buttonNodes), 0, 3),
-        "raw_nodes" => array_slice($textNodes, 0, 15)
+        "raw_nodes" => array_slice($textNodes, 0, 20)
     ];
+}
+
+function dedupePreviewNodes($nodes) {
+    $seen = [];
+    $result = [];
+
+    foreach ($nodes as $node) {
+        $text = normalizePreviewText($node['value'] ?? '');
+        $role = $node['role'] ?? '';
+        $type = $node['type'] ?? '';
+
+        if ($text === '') continue;
+
+        $key = $type . '|' . $role . '|' . $text;
+
+        if (isset($seen[$key])) continue;
+
+        $seen[$key] = true;
+        $result[] = $node;
+    }
+
+    return $result;
+}
+
+function normalizePreviewText($text) {
+    $text = mb_strtolower(trim((string)$text), 'UTF-8');
+    $text = preg_replace('/\s+/u', ' ', $text);
+    return $text;
 }
 
 function previewNode($node) {
@@ -706,9 +736,20 @@ function buildMapInfoRows($textNodes) {
         }
     }
 
-    return array_values(array_filter($rows, function ($row) {
-        return trim($row['label']) !== '' || trim($row['value']) !== '';
-    }));
+    $unique = [];
+    $result = [];
+
+    foreach ($rows as $row) {
+        $key = normalizePreviewText($row['label'] . '|' . $row['value']);
+
+        if ($key === '|') continue;
+        if (isset($unique[$key])) continue;
+
+        $unique[$key] = true;
+        $result[] = $row;
+    }
+
+    return $result;
 }
 
 function buildUtilityBox($textNodes) {
@@ -716,24 +757,43 @@ function buildUtilityBox($textNodes) {
         return ($n['role'] ?? '') === 'utility';
     }));
 
+    $utilityNodes = dedupePreviewNodes($utilityNodes);
+
     if (!count($utilityNodes)) return null;
 
-    $items = array_map(function ($n) {
+    $items = array_values(array_map(function ($n) {
         return [
             "text" => $n['value'],
             "location" => $n['location'],
             "line" => $n['line']
         ];
-    }, $utilityNodes);
+    }, $utilityNodes));
 
-    $title = $items[0]['text'] ?? '';
-    $amount = $items[1]['text'] ?? '';
-    $details = array_slice($items, 2);
+    $title = '';
+    $amount = '';
+    $details = [];
+
+    foreach ($items as $index => $item) {
+        $textLower = mb_strtolower($item['text'], 'UTF-8');
+
+        if ($title === '' && str_contains($textLower, 'số tiền thanh toán')) {
+            $title = $item['text'];
+            $amount = $items[$index + 1]['text'] ?? '';
+            $details = array_slice($items, $index + 2);
+            break;
+        }
+    }
+
+    if ($title === '') {
+        $title = $items[0]['text'] ?? '';
+        $amount = $items[1]['text'] ?? '';
+        $details = array_slice($items, 2);
+    }
 
     return [
         "title" => $title,
         "amount" => $amount,
-        "details" => $details
+        "details" => array_slice($details, 0, 4)
     ];
 }
 
@@ -750,6 +810,10 @@ function inferLogoText($textNodes) {
 
     if (str_contains($combined, 'nam an')) {
         return 'NAM AN';
+    }
+
+    if (str_contains($combined, 'lime orange')) {
+        return 'Lime Orange';
     }
 
     foreach ($textNodes as $node) {

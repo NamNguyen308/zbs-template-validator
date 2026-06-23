@@ -86,23 +86,27 @@ function renderPreview(preview) {
     return;
   }
 
+  const cleaned = normalizePreview(preview);
+
   messagePreview.className = "message-preview";
 
-  const logo = preview.logo_text || "BRAND";
-  const title = preview.title;
-  const body = preview.body || [];
-  const infoRows = preview.info_rows || [];
-  const utilityBox = preview.utility_box || null;
-  const buttons = preview.buttons || [];
+  const logo = cleaned.logo_text || "BRAND";
+  const title = cleaned.title;
+  const body = cleaned.body || [];
+  const infoRows = cleaned.info_rows || [];
+  const utilityBox = cleaned.utility_box || null;
+  const buttons = cleaned.buttons || [];
 
   messagePreview.innerHTML = `
     <div class="zalo-phone-card">
       <div class="brand-logo-text">${escapeHtml(logo)}</div>
 
-      <div class="zalo-title">${highlightParams(escapeHtml(title.text))}</div>
+      <div class="zalo-title">
+        ${renderParams(title.text)}
+      </div>
 
       <div class="zalo-body">
-        ${body.map(item => `<p>${highlightParams(escapeHtml(item.text))}</p>`).join("")}
+        ${body.map(item => `<p>${renderParams(item.text)}</p>`).join("")}
       </div>
 
       ${infoRows.length ? `
@@ -110,7 +114,7 @@ function renderPreview(preview) {
           ${infoRows.map(row => `
             <div class="zalo-info-row">
               <span>${escapeHtml(row.label)}</span>
-              <strong>${highlightParams(escapeHtml(row.value))}</strong>
+              <strong>${renderParams(row.value)}</strong>
             </div>
           `).join("")}
         </div>
@@ -120,9 +124,9 @@ function renderPreview(preview) {
         <div class="zalo-payment-box">
           <div class="payment-left">
             <div class="payment-title">${escapeHtml(utilityBox.title)}</div>
-            <div class="payment-amount">${highlightParams(escapeHtml(utilityBox.amount))}</div>
+            <div class="payment-amount">${renderParams(utilityBox.amount)}</div>
             ${(utilityBox.details || []).map(d => `
-              <div class="payment-detail">${highlightParams(escapeHtml(d.text))}</div>
+              <div class="payment-detail">${renderParams(d.text)}</div>
             `).join("")}
           </div>
           <div class="payment-icon">▣</div>
@@ -138,6 +142,110 @@ function renderPreview(preview) {
       </div>
     </div>
   `;
+}
+
+function normalizePreview(preview) {
+  const title = preview.title;
+  const titleKey = normalizeText(title?.text || "");
+
+  const body = dedupeByText(preview.body || [])
+    .filter(item => normalizeText(item.text) !== titleKey)
+    .filter(item => !looksLikeUtilityText(item.text));
+
+  const infoRows = dedupeRows(preview.info_rows || []);
+  const buttons = dedupeByText(preview.buttons || []);
+
+  let utilityBox = preview.utility_box || null;
+
+  if (utilityBox) {
+    utilityBox = {
+      title: utilityBox.title || "",
+      amount: utilityBox.amount || "",
+      details: dedupeByText(utilityBox.details || [])
+    };
+  }
+
+  return {
+    ...preview,
+    logo_text: normalizeLogo(preview.logo_text),
+    title,
+    body,
+    info_rows: infoRows,
+    utility_box: utilityBox,
+    buttons
+  };
+}
+
+function normalizeLogo(logo) {
+  const text = String(logo || "BRAND").trim();
+
+  if (text.toLowerCase().includes("bvland") || text.toLowerCase().includes("bvland")) {
+    return "BVland";
+  }
+
+  if (text.toLowerCase().includes("bv")) {
+    return "BVland";
+  }
+
+  return text;
+}
+
+function dedupeByText(items) {
+  const seen = new Set();
+  const result = [];
+
+  for (const item of items) {
+    const key = normalizeText(item.text || "");
+
+    if (!key) continue;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    result.push(item);
+  }
+
+  return result;
+}
+
+function dedupeRows(rows) {
+  const seen = new Set();
+  const result = [];
+
+  for (const row of rows) {
+    const key = normalizeText(`${row.label}|${row.value}`);
+
+    if (!key || key === "|") continue;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    result.push(row);
+  }
+
+  return result;
+}
+
+function looksLikeUtilityText(text) {
+  const value = normalizeText(text);
+
+  return (
+    value === "số tiền thanh toán" ||
+    value.includes("ngân hàng tmcp") ||
+    value.startsWith("tài khoản:") ||
+    value.includes("công ty cp bv invest")
+  );
+}
+
+function normalizeText(text) {
+  return String(text || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function renderParams(text) {
+  const safe = escapeHtml(text);
+
+  return safe.replace(/(&lt;[^&]+&gt;)/g, '<span class="param-inline">$1</span>');
 }
 
 function renderViolations(violations) {
@@ -257,10 +365,6 @@ function loadSample() {
 }
 ]
 }`;
-}
-
-function highlightParams(text) {
-  return text.replace(/(&lt;[^&]+&gt;)/g, '<span class="param-chip">$1</span>');
 }
 
 function escapeHtml(str) {
