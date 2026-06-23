@@ -67,7 +67,7 @@ function renderResult(result) {
   }
 
   templateTypeBadge.textContent = result.template_type || "Unknown";
-  rulesChecked.textContent = result.rules_checked || 6;
+  rulesChecked.textContent = result.rules_checked || 5;
   violationCount.textContent = result.violations_count || 0;
   manualCount.textContent = result.manual_notes_count || 0;
 
@@ -90,7 +90,8 @@ function renderPreview(preview) {
 
   messagePreview.className = "message-preview";
 
-  const logo = cleaned.logo_text || "BRAND";
+  const logo = cleaned.logo_text || "OA";
+  const logoImage = cleaned.logo_image_url || null;
   const title = cleaned.title;
   const body = cleaned.body || [];
   const infoRows = cleaned.info_rows || [];
@@ -99,11 +100,15 @@ function renderPreview(preview) {
 
   messagePreview.innerHTML = `
     <div class="zalo-phone-card">
-      <div class="brand-logo-text">${escapeHtml(logo)}</div>
-
-      <div class="zalo-title">
-        ${renderParams(title.text)}
+      <div class="brand-logo-wrap">
+        ${
+          logoImage
+            ? `<img class="brand-logo-img" src="${escapeHtml(logoImage)}" alt="OA logo" />`
+            : `<div class="brand-logo-text">${escapeHtml(logo)}</div>`
+        }
       </div>
+
+      <div class="zalo-title">${renderParams(title.text)}</div>
 
       <div class="zalo-body">
         ${body.map(item => `<p>${renderParams(item.text)}</p>`).join("")}
@@ -168,6 +173,7 @@ function normalizePreview(preview) {
   return {
     ...preview,
     logo_text: normalizeLogo(preview.logo_text),
+    logo_image_url: preview.logo_image_url || null,
     title,
     body,
     info_rows: infoRows,
@@ -177,15 +183,9 @@ function normalizePreview(preview) {
 }
 
 function normalizeLogo(logo) {
-  const text = String(logo || "BRAND").trim();
+  const text = String(logo || "OA").trim();
 
-  if (text.toLowerCase().includes("bvland") || text.toLowerCase().includes("bvland")) {
-    return "BVland";
-  }
-
-  if (text.toLowerCase().includes("bv")) {
-    return "BVland";
-  }
+  if (text.toLowerCase().includes("bv")) return "BVland";
 
   return text;
 }
@@ -231,7 +231,9 @@ function looksLikeUtilityText(text) {
     value === "số tiền thanh toán" ||
     value.includes("ngân hàng tmcp") ||
     value.startsWith("tài khoản:") ||
-    value.includes("công ty cp bv invest")
+    value.includes("công ty cp bv invest") ||
+    value.startsWith("giảm ") ||
+    value.startsWith("hsd:")
   );
 }
 
@@ -319,46 +321,54 @@ function clearAll() {
 
 function loadSample() {
   jsonInput.value = `"root":{7 items
-"oa_id":string"375075320"
-"extend_info":string"375075320"
-"sections":[6 items
+"oa_id":string"335055060"
+"extend_info":string"335055060"
+"sections":[5 items
 1:{1 item
 "banner":{5 items
 "title":{8 items
-"text":string"Nam An xin chào Quý khách <name> - Mã khách hàng <id>,"
+"text":string"Chúc mừng sinh nhật <customer_name>"
 }
 }
 }
 2:{1 item
 "banner":{5 items
 "title":{8 items
-"text":string"Nam An lắng nghe bạn từng chi tiết!"
+"text":string"Lime Orange gửi lời chúc mừng sinh nhật tốt đẹp nhất đến <span class="param"><customer_name></span>! Tri ân khách hàng hạng <span class="param"><membership_tier></span>, tặng bạn Voucher <span class="param"><discount_discountAmount></span><span class="param"><discount_discountDesc></span>. Cảm ơn bạn đã tin tưởng Lime Orange!"
 }
 }
 }
 3:{1 item
-"banner":{5 items
-"title":{8 items
-"text":string"Ý kiến của Quý khách chính là chìa khóa để chúng tôi cải thiện dịch vụ, nâng cao chất lượng chăm sóc và mang đến trải nghiệm ngày càng tốt hơn."
+"open_utility":{8 items
+"type":string"voucher"
+"top":{5 items
+"contents":{7 items
+"items":[3 items
+0:{3 items
+"text":string"Giảm <discount_discountAmount>"
+}
+1:{3 items
+"text":string"<discount_summary>"
+}
+2:{3 items
+"text":string"HSD: <discount_startDate> - <discount_endDate>"
+}
+]
+}
 }
 }
 }
 4:{1 item
-"banner":{5 items
-"title":{8 items
-"text":string"Quý khách vui lòng chia sẻ cảm nhận của mình để giúp chúng tôi cải thiện dịch vụ tốt hơn. Xin cảm ơn!"
-}
-}
-}
-5:{1 item
 "buttons":{2 items
-"items":[1 item
+"items":[3 items
 0:{5 items
-"text":string"Khảo sát ngay"
-"click":{5 items
-"action":string"action.open.inapp"
-"data":string"https://forms.office.com/r/pirJb83HK8"
+"text":string"Xem mã ưu đãi"
 }
+1:{5 items
+"text":string"Mua sắm ngay"
+}
+2:{5 items
+"text":string"Quan tâm OA"
 }
 ]
 }

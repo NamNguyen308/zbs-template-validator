@@ -114,7 +114,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 18px;
   background: #f8fafc;
-  padding: 16px;
+  padding: 18px;
   min-height: 460px;
   max-height: 600px;
   overflow: auto;
@@ -130,75 +130,149 @@ button {
 
 .zalo-phone-card {
   width: 100%;
-  max-width: 390px;
+  max-width: 330px;
   margin: 0 auto;
   background: #ffffff;
-  border-radius: 18px;
+  border-radius: 6px;
   border: 1px solid #dfe5ef;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-  padding: 18px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  padding: 12px;
+  font-family: Arial, sans-serif;
+}
+
+.brand-logo-wrap {
+  margin-bottom: 10px;
+}
+
+.brand-logo-img {
+  display: block;
+  max-width: 86px;
+  max-height: 38px;
+  object-fit: contain;
 }
 
 .brand-logo-text {
-  display: inline-block;
-  font-weight: 900;
-  font-size: 18px;
-  color: #111827;
-  letter-spacing: 0.3px;
-  margin-bottom: 14px;
-  text-transform: uppercase;
+  text-transform: none;
+  font-size: 16px;
+  font-weight: 800;
+  color: #4b5563;
+  margin-bottom: 10px;
 }
 
 .zalo-title {
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 6px;
   color: #111827;
-  font-size: 15px;
-  line-height: 1.45;
-  margin-bottom: 8px;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .zalo-body p {
-  margin: 10px 0 4px;
-  color: #374151;
-  line-height: 1.45;
-  font-size: 14px;
+  font-size: 12px;
+  line-height: 1.28;
+  color: #4b5563;
+  margin: 5px 0;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .zalo-info-table {
-  margin-top: 14px;
+  margin-top: 8px;
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
 
 .zalo-info-row {
   display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 10px;
+  grid-template-columns: 100px 1fr;
+  gap: 6px;
   align-items: start;
-  font-size: 14px;
+  font-size: 12px;
 }
 
-.zalo-info-row span { color: #4b5563; }
-.zalo-info-row strong { color: #111827; font-weight: 800; word-break: break-word; }
+.zalo-info-row span {
+  color: #4b5563;
+}
 
-.zalo-buttons { display: grid; gap: 10px; margin-top: 14px; }
+.zalo-info-row strong {
+  color: #111827;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.zalo-payment-box {
+  margin-top: 10px;
+  background: #eef8ff;
+  border: 1px solid #cfe8ff;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.payment-title {
+  font-size: 11px;
+  color: #374151;
+  margin-bottom: 1px;
+}
+
+.payment-amount {
+  font-size: 13px;
+  font-weight: 800;
+  color: #111827;
+  margin-bottom: 1px;
+}
+
+.payment-detail {
+  font-size: 10px;
+  line-height: 1.22;
+  color: #4b5563;
+}
+
+.payment-icon {
+  color: #dbeafe;
+  font-size: 28px;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.zalo-buttons {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
 .zalo-buttons button {
   width: 100%;
   border: none;
-  background: #1769ff;
-  color: white;
-  font-weight: 800;
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 5px;
+  padding: 9px 10px;
+  font-weight: 700;
+  font-size: 12px;
   cursor: default;
 }
 
+.primary-preview-btn {
+  background: #1769ff !important;
+  color: #ffffff !important;
+}
+
+.secondary-preview-btn {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+.param-inline,
 .param-chip {
-  background: #e8f0ff;
-  color: #0f4ec8;
-  padding: 1px 5px;
-  border-radius: 6px;
+  display: inline;
+  background: transparent;
+  color: #111827;
   font-weight: 800;
+  padding: 0;
+  border-radius: 0;
 }
 
 .result-card, .suggestion-card, .rule-map-card { margin: 0 40px 26px; }
@@ -214,28 +288,125 @@ button {
   gap: 14px;
   margin-bottom: 18px;
 }
-.summary-grid div { background: #f8fafc; border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
-.summary-grid strong { display: block; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-.summary-grid span { font-size: 24px; font-weight: 800; }
+
+.summary-grid div {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.summary-grid strong {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.summary-grid span {
+  font-size: 24px;
+  font-weight: 800;
+}
 
 .violations-list { display: grid; gap: 14px; }
-.violation-card { border: 1px solid #ffd3d3; background: #fffafa; border-radius: 16px; padding: 18px; }
-.violation-top { display: flex; justify-content: space-between; margin-bottom: 10px; }
-.rule-id { background: var(--red); color: white; padding: 6px 10px; border-radius: 999px; font-weight: 800; font-size: 12px; }
-.category { background: #fff0f0; color: var(--red); padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
-.violation-card h3 { margin: 0 0 12px; }
-.info-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; margin: 8px 0; align-items: start; }
-.info-row strong { color: var(--muted); }
-code { background: #f1f5f9; padding: 4px 7px; border-radius: 8px; word-break: break-word; }
-.reason-box { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin-top: 12px; }
-.reason-box strong { display: block; margin-bottom: 6px; color: #334155; }
-.reason-box p { margin: 0; color: #475569; line-height: 1.5; }
-.fix-box { background: var(--yellow); border: 1px solid #ffe1a6; border-radius: 12px; padding: 12px; margin-top: 12px; }
-.fix-box p { margin: 6px 0 0; }
-.empty-state { color: var(--green); background: #e9f8ef; border: 1px solid #c7edd5; border-radius: 14px; padding: 18px; }
 
-.suggestions-list { margin: 0; padding-left: 22px; }
-.suggestions-list li { margin: 10px 0; line-height: 1.5; }
+.violation-card {
+  border: 1px solid #ffd3d3;
+  background: #fffafa;
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.violation-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.rule-id {
+  background: var(--red);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.category {
+  background: #fff0f0;
+  color: var(--red);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.violation-card h3 { margin: 0 0 12px; }
+
+.info-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 10px;
+  margin: 8px 0;
+  align-items: start;
+}
+
+.info-row strong { color: var(--muted); }
+
+code {
+  background: #f1f5f9;
+  padding: 4px 7px;
+  border-radius: 8px;
+  word-break: break-word;
+}
+
+.reason-box {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.reason-box strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #334155;
+}
+
+.reason-box p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.fix-box {
+  background: var(--yellow);
+  border: 1px solid #ffe1a6;
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.fix-box p { margin: 6px 0 0; }
+
+.empty-state {
+  color: var(--green);
+  background: #e9f8ef;
+  border: 1px solid #c7edd5;
+  border-radius: 14px;
+  padding: 18px;
+}
+
+.suggestions-list {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.suggestions-list li {
+  margin: 10px 0;
+  line-height: 1.5;
+}
 
 .debug-panel {
   margin-top: 20px;
@@ -246,12 +417,31 @@ code { background: #f1f5f9; padding: 4px 7px; border-radius: 8px; word-break: br
   overflow: auto;
   white-space: pre-wrap;
 }
+
 .hidden { display: none; }
 
-table { width: 100%; border-collapse: collapse; overflow: hidden; }
-th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 13px; vertical-align: top; }
-th { background: #f8fafc; color: #475569; }
-td:first-child { font-weight: 800; color: var(--blue-dark); }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+}
+
+th, td {
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  padding: 13px;
+  vertical-align: top;
+}
+
+th {
+  background: #f8fafc;
+  color: #475569;
+}
+
+td:first-child {
+  font-weight: 800;
+  color: var(--blue-dark);
+}
 
 @media (max-width: 1000px) {
   .layout { grid-template-columns: 1fr; padding: 20px; }
@@ -259,264 +449,4 @@ td:first-child { font-weight: 800; color: var(--blue-dark); }
   .topbar { padding: 24px 20px; flex-direction: column; align-items: flex-start; gap: 14px; }
   .summary-grid { grid-template-columns: 1fr; }
   .info-row { grid-template-columns: 1fr; }
-}
-
-.message-preview {
-  background: #f8fafc;
-  padding: 18px;
-}
-
-.zalo-phone-card {
-  width: 100%;
-  max-width: 360px;
-  margin: 0 auto;
-  background: #ffffff;
-  border-radius: 8px;
-  border: 1px solid #dfe5ef;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  padding: 14px;
-  font-family: Arial, sans-serif;
-}
-
-.brand-logo-text {
-  font-weight: 800;
-  font-size: 18px;
-  color: #111827;
-  letter-spacing: 0;
-  margin-bottom: 12px;
-  text-transform: none;
-}
-
-.zalo-title {
-  font-weight: 700;
-  color: #111827;
-  font-size: 14px;
-  line-height: 1.35;
-  margin-bottom: 8px;
-  text-transform: none;
-}
-
-.zalo-body p {
-  margin: 6px 0;
-  color: #4b5563;
-  line-height: 1.35;
-  font-size: 13px;
-  text-transform: none;
-}
-
-.zalo-info-table {
-  margin-top: 10px;
-  display: grid;
-  gap: 6px;
-}
-
-.zalo-info-row {
-  display: grid;
-  grid-template-columns: 105px 1fr;
-  gap: 8px;
-  align-items: start;
-  font-size: 13px;
-}
-
-.zalo-info-row span {
-  color: #4b5563;
-}
-
-.zalo-info-row strong {
-  color: #111827;
-  font-weight: 700;
-  word-break: break-word;
-}
-
-.zalo-payment-box {
-  margin-top: 12px;
-  background: #eef7ff;
-  border: 1px solid #cfe7ff;
-  border-radius: 8px;
-  padding: 10px;
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.payment-title {
-  font-size: 12px;
-  color: #374151;
-  margin-bottom: 2px;
-}
-
-.payment-amount {
-  font-size: 14px;
-  color: #111827;
-  font-weight: 800;
-  margin-bottom: 2px;
-}
-
-.payment-detail {
-  font-size: 11px;
-  color: #4b5563;
-  line-height: 1.25;
-}
-
-.payment-icon {
-  flex: 0 0 auto;
-  color: #dbeafe;
-  font-size: 32px;
-  align-self: center;
-}
-
-.zalo-buttons {
-  margin-top: 10px;
-  display: grid;
-  gap: 7px;
-}
-
-.zalo-buttons button {
-  width: 100%;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 12px;
-  font-weight: 700;
-  font-size: 13px;
-  cursor: default;
-}
-
-.primary-preview-btn {
-  background: #1769ff !important;
-  color: white !important;
-}
-
-.secondary-preview-btn {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
-}
-
-.param-chip {
-  background: #e8f0ff;
-  color: #111827;
-  padding: 1px 4px;
-  border-radius: 5px;
-  font-weight: 800;
-}
-
-
-.zalo-phone-card {
-  max-width: 330px !important;
-  padding: 12px !important;
-  border-radius: 6px !important;
-  font-family: Arial, sans-serif !important;
-}
-
-.brand-logo-text {
-  text-transform: none !important;
-  font-size: 16px !important;
-  font-weight: 800 !important;
-  color: #4b5563 !important;
-  margin-bottom: 10px !important;
-}
-
-.zalo-title {
-  font-size: 13px !important;
-  font-weight: 700 !important;
-  line-height: 1.3 !important;
-  margin-bottom: 6px !important;
-  color: #111827 !important;
-  text-transform: none !important;
-}
-
-.zalo-body p {
-  font-size: 12px !important;
-  line-height: 1.28 !important;
-  color: #4b5563 !important;
-  margin: 5px 0 !important;
-  text-transform: none !important;
-}
-
-.zalo-info-table {
-  margin-top: 8px !important;
-  gap: 4px !important;
-}
-
-.zalo-info-row {
-  grid-template-columns: 100px 1fr !important;
-  gap: 6px !important;
-  font-size: 12px !important;
-}
-
-.zalo-info-row span {
-  color: #4b5563 !important;
-}
-
-.zalo-info-row strong {
-  color: #111827 !important;
-  font-weight: 700 !important;
-}
-
-.zalo-payment-box {
-  margin-top: 10px !important;
-  background: #eef8ff !important;
-  border: 1px solid #cfe8ff !important;
-  border-radius: 6px !important;
-  padding: 8px !important;
-}
-
-.payment-title {
-  font-size: 11px !important;
-  color: #374151 !important;
-  margin-bottom: 1px !important;
-}
-
-.payment-amount {
-  font-size: 13px !important;
-  font-weight: 800 !important;
-  color: #111827 !important;
-  margin-bottom: 1px !important;
-}
-
-.payment-detail {
-  font-size: 10px !important;
-  line-height: 1.22 !important;
-  color: #4b5563 !important;
-}
-
-.payment-icon {
-  color: #dbeafe !important;
-  font-size: 28px !important;
-}
-
-.zalo-buttons {
-  margin-top: 8px !important;
-  gap: 6px !important;
-}
-
-.zalo-buttons button {
-  font-size: 12px !important;
-  border-radius: 5px !important;
-  padding: 9px 10px !important;
-}
-
-.primary-preview-btn {
-  background: #1769ff !important;
-  color: #ffffff !important;
-}
-
-.secondary-preview-btn {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
-}
-
-.param-inline {
-  display: inline !important;
-  background: transparent !important;
-  color: #111827 !important;
-  font-weight: 800 !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
-}
-
-.param-chip {
-  background: transparent !important;
-  color: #111827 !important;
-  font-weight: 800 !important;
-  padding: 0 !important;
 }

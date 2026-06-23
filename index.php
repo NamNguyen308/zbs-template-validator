@@ -12,7 +12,7 @@
       <h1>ZBS Template Pre-checker</h1>
       <p>Rule-based validator for ZBS template moderation risks.</p>
     </div>
-    <span class="badge">6 automatic checks</span>
+    <span class="badge">5 automatic checks</span>
   </header>
 
   <main class="layout">
@@ -49,7 +49,7 @@
     </div>
 
     <div id="summary" class="summary-grid">
-      <div><strong>Rules checked</strong><span id="rulesChecked">6</span></div>
+      <div><strong>Rules checked</strong><span id="rulesChecked">5</span></div>
       <div><strong>Violations</strong><span id="violationCount">0</span></div>
       <div><strong>Manual notes</strong><span id="manualCount">0</span></div>
     </div>
@@ -88,14 +88,14 @@
           <td>Transaction / service context</td>
           <td>Checks whether the message explains the order, service, appointment, report, or activity that triggered it.</td>
           <td>The message asks for action but does not mention any order, service, appointment, report, or activity.</td>
-          <td>Add concrete context such as “Mã đơn hàng &lt;order_code&gt;”, “Dịch vụ &lt;service_name&gt;”, or “Ngày giao dịch &lt;transaction_date&gt;”.</td>
+          <td>Add context such as “Mã đơn hàng &lt;order_code&gt;”, “Dịch vụ &lt;service_name&gt;”, or “Ngày giao dịch &lt;transaction_date&gt;”.</td>
         </tr>
         <tr>
           <td>PAIR_001</td>
           <td>Customer + transaction/service identifier pair</td>
-          <td>Checks whether customer identity is paired with a transaction, service, account, appointment, or activity identifier.</td>
-          <td>The message has customer identity but does not include order ID, booking ID, service name, report period, or equivalent context.</td>
-          <td>Add a paired identifier such as “Mã đơn hàng &lt;order_code&gt;”, “Mã lịch hẹn &lt;booking_id&gt;”, or “Dịch vụ đã sử dụng &lt;service_name&gt;”.</td>
+          <td>Checks whether customer identity is paired with a customer code, order ID, contract ID, transaction ID, or service/account identifier.</td>
+          <td>The message has &lt;customer_name&gt; but does not include customer code, order ID, contract ID, or transaction ID.</td>
+          <td>Add “Mã khách hàng &lt;customer_code&gt;”, “Mã đơn hàng &lt;order_code&gt;”, or “Mã hợp đồng &lt;contract_id&gt;”.</td>
         </tr>
         <tr>
           <td>PARAM_001</td>
@@ -108,15 +108,8 @@
           <td>PARAM_002</td>
           <td>Parameter prefix clarity</td>
           <td>Checks whether important parameters have a clear label or prefix. Map-info value parameters are considered labelled if their paired key exists.</td>
-          <td>&lt;discount_summary&gt; appears alone without “Điều kiện áp dụng”, or two voucher parameters appear directly next to each other.</td>
-          <td>Add labels such as “Điều kiện áp dụng: &lt;discount_summary&gt;” or “Số tiền: &lt;cost&gt;”.</td>
-        </tr>
-        <tr>
-          <td>TEXT_001</td>
-          <td>Writing quality</td>
-          <td>Checks common typo-like wording, unnatural phrasing, repeated punctuation, and obvious writing issues.</td>
-          <td>Text contains typo-like wording such as “KÍCH HỌA”.</td>
-          <td>Correct the wording, for example “KÍCH HOẠT”.</td>
+          <td>&lt;discount_summary&gt; appears alone without “Điều kiện áp dụng”, or &lt;discount_discountDesc&gt; appears without a clear prefix.</td>
+          <td>Add labels such as “Điều kiện áp dụng: &lt;discount_summary&gt;” or “Điều kiện áp dụng: &lt;discount_discountDesc&gt;”.</td>
         </tr>
       </tbody>
     </table>
