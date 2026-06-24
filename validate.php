@@ -918,23 +918,79 @@ function findNearbyUtilityLabelForParam($textNodes, $param) {
 
 function runParameterPrefixClarityCheck($textNodes, $params, &$violations) {
     foreach ($params as $param) {
-        $mapInfoLabel = findMapInfoLabelForParam($textNodes, $param);
-        if ($mapInfoLabel !== null && trim($mapInfoLabel) !== '') continue;
-
-        $nearbyUtilityLabel = findNearbyUtilityLabelForParam($textNodes, $param);
-        if ($nearbyUtilityLabel !== null && trim($nearbyUtilityLabel) !== '') continue;
-
         $text = $param['text'];
         $value = $param['value'];
-        $offset = $param['offset'];
         $name = mb_strtolower($param['name'], 'UTF-8');
+        $offset = $param['offset'];
+        $location = mb_strtolower($param['location'] ?? '', 'UTF-8');
 
-        $before = mb_substr($text, max(0, $offset - 45), 45, 'UTF-8');
+        // 1. Skip map_info value if it already has paired label
+        $mapInfoLabel = findMapInfoLabelForParam($textNodes, $param);
+        if ($mapInfoLabel !== null && trim($mapInfoLabel) !== '') {
+            continue;
+        }
 
-        $hasClearPrefix = preg_match('/(quý khách|khách hàng|mã khách hàng|mã đơn hàng|mã hợp đồng|mã lịch hẹn|mã|tên|điều kiện|hạn|hsd|số tiền|giá|ưu đãi|voucher|hạng|ngày|giờ|nơi|dịch vụ|trạng thái|biển số|tin đăng|môi giới|nội dung hẹn|giảm)\s*[:：]?\s*$/iu', $before);
+        // 2. Skip utility-labelled params
+        $nearbyUtilityLabel = findNearbyUtilityLabelForParam($textNodes, $param);
+        if ($nearbyUtilityLabel !== null && trim($nearbyUtilityLabel) !== '') {
+            continue;
+        }
 
-        $lineHasDateLabel = preg_match('/(HSD|hạn sử dụng|ngày hiệu lực|hiệu lực)/iu', $text);
+        // 3. Voucher utility params should not be over-flagged
+        // Example:
+        // Giảm <discount_discountAmount>
+        // <discount_summary>
+        // HSD: <discount_startDate> - <discount_endDate>
+        if (
+            str_contains($location, 'open_utility') &&
+            (
+                $name === 'discount_discountamount' ||
+                $name === 'discount_summary' ||
+                $name === 'discount_startdate' ||
+                $name === 'discount_enddate' ||
+                $name === 'voucher_code' ||
+                $name === 'expired_date'
+            )
+        ) {
+            continue;
+        }
 
+        // 4. Date params are valid if the same line has HSD / expiry wording
+        if (
+            preg_match('/(HSD|hạn sử dụng|ngày hiệu lực|hiệu lực|từ ngày|đến ngày)/iu', $text) &&
+            (
+                str_contains($name, 'date') ||
+                str_contains($name, 'expired')
+            )
+        ) {
+            continue;
+        }
+
+        // 5. Ignore very common low-risk params if they already have natural context
+        if (
+            in_array($name, [
+                'customer_name',
+                'membership_tier',
+                'discount_discountamount',
+                'discount_startdate',
+                'discount_enddate',
+                'date',
+                'time',
+                'transfer_amount',
+                'bank_transfer_note'
+            ], true)
+        ) {
+            continue;
+        }
+
+        $before = mb_substr($text, max(0, $offset - 60), 60, 'UTF-8');
+
+        $hasClearPrefix = preg_match(
+            '/(quý khách|khách hàng|mã khách hàng|mã đơn hàng|mã hợp đồng|mã lịch hẹn|mã|tên|hạng|điều kiện|hạn|hsd|số tiền|giá trị|ưu đãi|voucher|ngày|giờ|nơi|dịch vụ|trạng thái|biển số|nội dung hẹn|giảm|tri ân)\s*[:：]?\s*$/iu',
+            $before
+        );
+
+        // 6. Only flag risky params, not every param
         $isRiskyParam =
             str_contains($name, 'discountdesc') ||
             str_contains($name, 'summary') ||
@@ -942,12 +998,38 @@ function runParameterPrefixClarityCheck($textNodes, $params, &$violations) {
             str_contains($name, 'price') ||
             str_contains($name, 'cost') ||
             str_contains($name, 'voucher') ||
-            str_contains($name, 'expired');
+            str_contains($name, 'expired') ||
+            str_contains($name, 'code');
 
-        if ($lineHasDateLabel && (str_contains($name, 'date') || str_contains($name, 'expired'))) continue;
-        if (in_array($name, ['date', 'time', 'transfer_amount', 'bank_transfer_note'], true)) continue;
+        if (!$isRiskyParam) {
+            continue;
+        }
 
-        if ($isRiskyParam && !$hasClearPrefix) {
+        // 7. Specific case: <discount_discountDesc> directly after amount is ambiguous
+        // Example: Voucher <discount_discountAmount><discount_discountDesc>
+        if (str_contains($name, 'discountdesc')) {
+            $message = [
+                'reason' => 'The discount description parameter is attached to the discount amount without a clear label. Reviewers may not know whether this value means condition, discount type, or usage rule.',
+                'suggestion' => "Add a clear prefix such as: Điều kiện áp dụng: {$value}."
+            ];
+
+            addViolation(
+                $violations,
+                "PARAM_002",
+                "Parameter needs clearer prefix",
+                "Parameter Prefix Clarity",
+                $param['location'],
+                $value,
+                $message['reason'],
+                $message['suggestion'],
+                $param['source_line']
+            );
+
+            continue;
+        }
+
+        // 8. General risky param without clear prefix
+        if (!$hasClearPrefix) {
             $message = buildParameterPrefixMessage($value, $text);
 
             addViolation(
